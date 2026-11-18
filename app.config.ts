@@ -60,6 +60,11 @@ const config: ExpoConfig = {
       },
     ],
   ],
+  extra: {
+    eas: {
+      projectId: '7f1e5fe6-db25-4767-9c2e-571f4d132511',
+    },
+  },
 };
 
 export default config;
