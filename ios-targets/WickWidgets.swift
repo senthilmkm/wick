@@ -16,7 +16,7 @@ struct WickEntry: TimelineEntry {
 }
 
 struct WickProvider: TimelineProvider {
-  private let appGroupId = "group.com.wick.app"
+  private let appGroupId = "group.com.senthilmkm.wick"
 
   func placeholder(in context: Context) -> WickEntry {
     WickEntry(date: Date(), snapshot: WickWidgetSnapshot(

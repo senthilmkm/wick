@@ -14,8 +14,7 @@ const config: ExpoConfig = {
   scheme: 'wick',
   userInterfaceStyle: 'dark',
   ios: {
-    bundleIdentifier: 'com.wick.app',
-    buildNumber: '1',
+    bundleIdentifier: 'com.senthilmkm.wick',
     supportsTablet: false,
     associatedDomains: ['applinks:wick.app'],
     config: {
@@ -24,8 +23,8 @@ const config: ExpoConfig = {
     entitlements: {
       'com.apple.developer.healthkit': true,
       'com.apple.developer.healthkit.background-delivery': true,
-      'com.apple.security.application-groups': ['group.com.wick.app'],
-      'com.apple.developer.icloud-container-identifiers': ['iCloud.com.wick.app'],
+      'com.apple.security.application-groups': ['group.com.senthilmkm.wick'],
+      'com.apple.developer.icloud-container-identifiers': ['iCloud.com.senthilmkm.wick'],
       'com.apple.developer.icloud-services': ['CloudKit'],
       'aps-environment': 'production',
     },

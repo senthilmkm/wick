@@ -7,7 +7,7 @@ import WidgetKit
 final class WickMotionModule: NSObject {
   private let healthStore = HKHealthStore()
   private let pedometer = CMPedometer()
-  private let appGroupId = "group.com.wick.app"
+  private let appGroupId = "group.com.senthilmkm.wick"
 
   @objc func enableBackgroundStepObserver(_ resolve: @escaping (Any?) -> Void, reject: @escaping (String, String, Error?) -> Void) {
     guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else {

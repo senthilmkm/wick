@@ -3,12 +3,12 @@
     "apps": [],
     "details": [
       {
-        "appID": "TEAMID.com.wick.app",
+        "appID": "2KJK6895B3.com.senthilmkm.wick",
         "paths": ["/spark/*"]
       }
     ]
   },
   "appclips": {
-    "apps": ["TEAMID.com.wick.app.Clip"]
+    "apps": ["2KJK6895B3.com.senthilmkm.wick.Clip"]
   }
 }
