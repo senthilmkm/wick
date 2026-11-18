@@ -5,6 +5,12 @@ const config: ExpoConfig = {
   slug: 'wick',
   version: '1.0.0',
   orientation: 'portrait',
+  icon: './assets/icon.png',
+  splash: {
+    image: './assets/icon.png',
+    resizeMode: 'contain',
+    backgroundColor: '#0A0A0C',
+  },
   scheme: 'wick',
   userInterfaceStyle: 'dark',
   ios: {
