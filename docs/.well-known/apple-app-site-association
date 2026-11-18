@@ -1,0 +1,14 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TEAMID.com.wick.app",
+        "paths": ["/spark/*"]
+      }
+    ]
+  },
+  "appclips": {
+    "apps": ["TEAMID.com.wick.app.Clip"]
+  }
+}

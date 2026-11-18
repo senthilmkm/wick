@@ -1,0 +1,103 @@
+import {
+  buildSparkUniversalLink,
+  createSparkToken,
+  SPARK_EXPIRY_MS,
+  SPARK_STEPS_REQUIRED,
+  startSparkRescue,
+  updateSparkRescueProgress,
+  validateSparkToken,
+} from '../src/engine/sparkEngine';
+import {
+  canAddFriend,
+  canExportPdf,
+  canExportVideo,
+  canOfferFreeTrial,
+  canUseTheme,
+  createInitialEntitlement,
+  FREE_MAX_LEDGER_DAYS,
+  getVisibleLedgerLimit,
+  recordVideoExport,
+} from '../src/engine/trialGuard';
+
+describe('sparkEngine', () => {
+  const secret = 'keychain-secret-123';
+  const now = 1_700_000_000_000;
+
+  it('creates, links, validates, and tracks a 500-step Spark Rescue', () => {
+    const token = createSparkToken('spk-1', '  Maya  ', 'dev-a', secret, now);
+    expect(token.senderName).toBe('Maya');
+    expect(buildSparkUniversalLink(token)).toContain('https://wick.app/spark/spk-1?t=');
+
+    const blankNameToken = createSparkToken('spk-2', '   ', 'dev-a', secret, now);
+    expect(blankNameToken.senderName).toBe('A friend');
+
+    const consumed = new Set<string>();
+    expect(validateSparkToken(token, secret, now + 1000, consumed)).toEqual({ valid: true });
+
+    // Tampered signature
+    expect(
+      validateSparkToken({ ...token, signature: 'bad' }, secret, now + 1000, consumed).valid
+    ).toBe(false);
+
+    // Expired token
+    expect(
+      validateSparkToken(token, secret, now + SPARK_EXPIRY_MS + 1, consumed).valid
+    ).toBe(false);
+
+    // Replay nonce
+    consumed.add('spk-1');
+    expect(validateSparkToken(token, secret, now + 1000, consumed).valid).toBe(false);
+
+    // Rescue step progress
+    const rescue = startSparkRescue(token);
+    const mid = updateSparkRescueProgress(rescue, 250, now + 5000);
+    expect(mid.completed).toBe(false);
+    expect(mid.stepsWalked).toBe(250);
+
+    const done = updateSparkRescueProgress(mid, 650, now + 9000);
+    expect(done.completed).toBe(true);
+    expect(done.stepsWalked).toBe(SPARK_STEPS_REQUIRED);
+
+    // No-op once completed or expired
+    expect(updateSparkRescueProgress(done, 700, now + 10000)).toBe(done);
+    expect(updateSparkRescueProgress(rescue, 100, now + SPARK_EXPIRY_MS + 100)).toBe(rescue);
+  });
+});
+
+describe('trialGuard & anti-reinstall protection', () => {
+  const day1 = new Date(2026, 10, 18, 9, 0);
+  const nextWeek = new Date(2026, 10, 26, 9, 0);
+
+  it('denies free trial on reinstall or when StoreKit/CloudKit flags already exist', () => {
+    expect(canOfferFreeTrial(true, null, false)).toBe(true);
+    expect(canOfferFreeTrial(false, null, false)).toBe(false);
+    expect(canOfferFreeTrial(true, 123456, false)).toBe(false);
+    expect(canOfferFreeTrial(true, null, true)).toBe(false);
+  });
+
+  it('enforces Free vs Wick Pro entitlements and weekly video export quotas', () => {
+    const freeEnt = createInitialEntitlement(day1, false, true, null, false);
+    expect(freeEnt.isEligibleForIntroTrial).toBe(true);
+    expect(canUseTheme(freeEnt, 'obsidian_night')).toBe(true);
+    expect(canUseTheme(freeEnt, 'midnight_hearth')).toBe(false);
+    expect(canAddFriend(freeEnt, 0)).toBe(true);
+    expect(canAddFriend(freeEnt, 1)).toBe(false);
+    expect(canExportPdf(freeEnt)).toBe(false);
+    expect(getVisibleLedgerLimit(freeEnt)).toBe(FREE_MAX_LEDGER_DAYS);
+
+    expect(canExportVideo(freeEnt, day1)).toBe(true);
+    const afterExport = recordVideoExport(freeEnt, day1);
+    expect(canExportVideo(afterExport, day1)).toBe(false);
+    // Resets in new week
+    expect(canExportVideo(afterExport, nextWeek)).toBe(true);
+    const newWeekExport = recordVideoExport(afterExport, nextWeek);
+    expect(newWeekExport.freeVideoExportsThisWeek).toBe(1);
+
+    const proEnt = createInitialEntitlement(day1, true, false, 1000, true);
+    expect(canUseTheme(proEnt, 'midnight_hearth')).toBe(true);
+    expect(canAddFriend(proEnt, 10)).toBe(true);
+    expect(canExportVideo(proEnt, day1)).toBe(true);
+    expect(canExportPdf(proEnt)).toBe(true);
+    expect(getVisibleLedgerLimit(proEnt)).toBe(Number.MAX_SAFE_INTEGER);
+  });
+});

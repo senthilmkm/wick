@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Wick — Keep Your Wick Lit</title>
+  <meta name="description" content="A minimalist, single-page iOS fitness app where one glowing 3D candle tracks your daily walking pace—with Multiplayer Lock Screen Widgets, 500-step Spark Rescues, and Day 100 Wax Drip streaks." />
+  <style>
+    :root { --bg: #0A0A0C; --surface: #121216; --text: #F5F5F7; --muted: #A1A1AA; --accent: #FF9F43; --glow: #FF8C24; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", sans-serif; background: radial-gradient(circle at 50% 18%, rgba(255,140,36,0.16), var(--bg) 55%); color: var(--text); line-height: 1.6; }
+    .container { max-width: 960px; margin: 0 auto; padding: 32px 20px 64px; }
+    nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 56px; }
+    .brand { font-size: 22px; font-weight: 700; color: var(--accent); letter-spacing: 1px; text-decoration: none; }
+    .nav-links { display: flex; gap: 20px; }
+    .nav-links a { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; }
+    .nav-links a:hover { color: var(--text); }
+    .hero { text-align: center; padding: 24px 0 56px; }
+    .candle-demo { width: 72px; height: 150px; margin: 0 auto 28px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
+    .flame { width: 24px; height: 42px; border-radius: 50% 50% 35% 35%; background: radial-gradient(circle at 50% 65%, #FFFFFF, #FFF6D6 40%, #FF9E2C 85%); box-shadow: 0 0 36px 12px rgba(255,158,44,0.55); animation: flicker 1.8s infinite ease-in-out alternate; margin-bottom: -2px; }
+    .wax { width: 64px; height: 96px; border-radius: 10px; background: linear-gradient(180deg, #F5EFE6 0%, #E7DFD5 65%, #FFB703 66%, #FB8500 82%, #E07A5F 100%); box-shadow: 0 12px 30px rgba(0,0,0,0.6); }
+    @keyframes flicker { from { transform: scaleY(0.95) scaleX(1.02); } to { transform: scaleY(1.06) scaleX(0.96); } }
+    h1 { font-size: clamp(36px, 6vw, 56px); font-weight: 800; letter-spacing: -0.02em; margin-bottom: 14px; }
+    .subtitle { color: var(--muted); font-size: 18px; max-width: 600px; margin: 0 auto 28px; }
+    .cta { display: inline-block; background: var(--accent); color: #0A0A0C; font-weight: 700; padding: 14px 28px; border-radius: 28px; text-decoration: none; font-size: 16px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 40px; }
+    .card { background: var(--surface); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 22px; }
+    .card h3 { color: var(--accent); font-size: 17px; margin-bottom: 8px; }
+    .card p { color: var(--muted); font-size: 14px; }
+    footer { margin-top: 64px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; color: var(--muted); font-size: 13px; }
+    footer a { color: var(--muted); text-decoration: none; margin-left: 16px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <nav>
+      <a class="brand" href="index.html">wick</a>
+      <div class="nav-links">
+        <a href="support.html">Support</a>
+        <a href="privacy.html">Privacy</a>
+        <a href="terms.html">Terms</a>
+      </div>
+    </nav>
+
+    <section class="hero">
+      <div class="candle-demo" aria-hidden="true">
+        <div class="flame"></div>
+        <div class="wax"></div>
+      </div>
+      <h1>Keep your wick lit.</h1>
+      <p class="subtitle">
+        Replace overwhelming fitness charts with one living 3D candle. It ignites on your first morning step, dims if you sit still too long, and freezes peacefully when you blow it out at bedtime.
+      </p>
+      <a class="cta" href="#features">Coming to iOS App Store</a>
+    </section>
+
+    <section id="features" class="grid">
+      <div class="card">
+        <h3>Multiplayer Lock Screen Widgets</h3>
+        <p>Pin a partner's or friend's candle to your iOS Lock Screen via iCloud Share. If their wick dims, nudge them to walk.</p>
+      </div>
+      <div class="card">
+        <h3>500-Step Spark Rescue</h3>
+        <p>Stuck at your desk with a dying ember? Send a Spark Request—when a friend walks 500 steps for you, your flame reignites.</p>
+      </div>
+      <div class="card">
+        <h3>Day 100 Wax Drip Streaks</h3>
+        <p>Every completed day cools into a permanent colored wax band on your candle. Protect your streak with earned Glass Domes.</p>
+      </div>
+      <div class="card">
+        <h3>Mic Blow-Out &amp; Sleep Sync</h3>
+        <p>Syncs with iOS Sleep Focus or lets you physically blow into your iPhone microphone to extinguish the flame at night.</p>
+      </div>
+      <div class="card">
+        <h3>3-Second Story Video &amp; PDF</h3>
+        <p>Export a 3-second looping video of your roaring or sputtering candle for Stories, or download your Wax Ledger as a PDF.</p>
+      </div>
+      <div class="card">
+        <h3>100% Local-First Privacy</h3>
+        <p>No accounts, no sign-ups, and zero server-side health storage. Your Apple Health steps never leave your iPhone.</p>
+      </div>
+    </section>
+
+    <footer>
+      <span>&copy; 2026 Wick App. All rights reserved.</span>
+      <div>
+        <a href="support.html">Support</a>
+        <a href="privacy.html">Privacy Policy</a>
+        <a href="terms.html">Terms &amp; Conditions</a>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>
