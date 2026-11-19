@@ -16,6 +16,7 @@ import { Dimensions, StyleSheet, View } from 'react-native';
 import {
   Easing,
   useDerivedValue,
+  useFrameCallback,
   useSharedValue,
   withDelay,
   withRepeat,
@@ -85,13 +86,28 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
   const sway = useSharedValue(0);
   const windTilt = useSharedValue(0);
   const gravityTilt = useSharedValue(0);
+  const turbPhase = useSharedValue(0);
+  const turbGust = useSharedValue(0);
   const bloom = useSharedValue(1);
   const sparkProgress = useSharedValue(0);
   const smokeDrift = useSharedValue(0);
 
   useEffect(() => {
-    windTilt.value = withSpring(windIntensity, { damping: 10, stiffness: 220 });
+    windTilt.value = withSpring(windIntensity, { damping: 9, stiffness: 260 });
   }, [windIntensity, windTilt]);
+
+  useFrameCallback((frameInfo) => {
+    'worklet';
+    const w = windTilt.value;
+    if (w <= 0.02) {
+      turbGust.value = 0;
+      return;
+    }
+    const dt = Math.min(0.05, (frameInfo.timeSincePreviousFrame ?? 16) / 1000);
+    turbPhase.value += dt * (16 + w * 28);
+    turbGust.value =
+      Math.sin(turbPhase.value) * 0.65 + Math.cos(turbPhase.value * 1.73) * 0.35;
+  });
 
   useEffect(() => {
     gravityTilt.value = withSpring(tiltAngle, { damping: 14, stiffness: 160 });
@@ -245,15 +261,27 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
     return p;
   }, [candleTop, candleBottom]);
 
-  const flameTransform = useDerivedValue(() => [
-    { translateX: CX },
-    { translateY: flameBaseY },
-    { rotate: sway.value + windTilt.value * 0.38 + gravityTilt.value },
-    { scaleX: (1 + (1 - breath.value) * 0.25 + windTilt.value * 0.2) * bloom.value },
-    { scaleY: Math.max(0.45, breath.value * bloom.value * (1 - windTilt.value * 0.35)) },
-    { translateX: -CX },
-    { translateY: -flameBaseY },
-  ]);
+  const flameTransform = useDerivedValue(() => {
+    const w = windTilt.value;
+    const g = turbGust.value;
+    return [
+      { translateX: CX },
+      { translateY: flameBaseY },
+      { rotate: sway.value + w * (0.42 + g * 0.38) + gravityTilt.value },
+      { scaleX: (1 + (1 - breath.value) * 0.25 + w * (0.22 + g * 0.14)) * bloom.value },
+      { scaleY: Math.max(0.4, breath.value * bloom.value * (1 - w * (0.34 + g * 0.16))) },
+      { translateX: -CX },
+      { translateY: -flameBaseY },
+    ];
+  });
+
+  const flameOpacity = useDerivedValue(() => {
+    const w = windTilt.value;
+    if (w <= 0.02) {
+      return 1;
+    }
+    return Math.max(0.48, 1 - w * (0.22 + Math.abs(turbGust.value) * 0.24));
+  });
 
   const haloTransform = useDerivedValue(() => [
     { translateX: CX },
@@ -471,7 +499,7 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
 
         {/* 3. Photorealistic 4-Layer Flame */}
         {intensity > 0 && (
-          <Group transform={flameTransform}>
+          <Group transform={flameTransform} opacity={flameOpacity}>
             <Path path={outerFlamePath} color={outerColor} opacity={0.52}>
               <BlurMask blur={16} style="normal" />
             </Path>

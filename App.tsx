@@ -599,7 +599,7 @@ function WickRoot() {
           ...Audio.RecordingOptionsPresets.LOW_QUALITY,
           isMeteringEnabled: true,
         });
-        rec.setProgressUpdateInterval(120);
+        rec.setProgressUpdateInterval(50);
         rec.setOnRecordingStatusUpdate((st) => {
           if (cancelled || typeof st.metering !== 'number') {
             return;
