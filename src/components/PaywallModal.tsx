@@ -1,6 +1,9 @@
 import React from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { EntitlementState } from '../types/wick';
+
+const PRIVACY_URL = 'https://senthilmkm.github.io/wick/privacy.html';
+const TERMS_URL = 'https://senthilmkm.github.io/wick/terms.html';
 
 export type PaywallReason = 'theme' | 'friend' | 'video' | 'pdf' | 'ledger' | 'dome' | 'general';
 
@@ -27,33 +30,27 @@ const REASON_TITLES: Record<PaywallReason, string> = {
 export const PaywallModal: React.FC<PaywallModalProps> = ({
   visible,
   reason,
-  entitlement,
   priceLabel,
   onStartPro,
   onRestorePurchases,
   onClose,
 }) => {
-  const trialText = priceLabel
-    ? `Start 7-Day Free Trial • Then ${priceLabel}`
-    : 'Start 7-Day Free Trial';
-  const subText = priceLabel ? `Subscribe to Wick Pro • ${priceLabel}` : 'Subscribe to Wick Pro';
+  const ctaText = priceLabel ? `Unlock Wick Pro • ${priceLabel}` : 'Unlock Wick Pro Forever';
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={styles.sheet}>
-          <Text style={styles.badge}>WICK PRO</Text>
+          <Text style={styles.badge}>WICK PRO • LIFETIME</Text>
           <Text style={styles.title}>{REASON_TITLES[reason]}</Text>
           <Text style={styles.body}>
-            Get all 6 background themes, unlimited Multiplayer Lock Screen Widgets, watermark-free
-            3s Story videos, PDF Wax Ledger exports, full streak history, and 1 bonus Glass Dome
-            every month.
+            One-time purchase to unlock all 6 background themes, unlimited Multiplayer Lock Screen
+            Widgets, watermark-free 3s Story videos, PDF Wax Ledger exports, full streak history,
+            and Glass Domes forever.
           </Text>
 
           <Pressable style={styles.primaryBtn} onPress={onStartPro}>
-            <Text style={styles.primaryText}>
-              {entitlement.isEligibleForIntroTrial ? trialText : subText}
-            </Text>
+            <Text style={styles.primaryText}>{ctaText}</Text>
           </Pressable>
 
           <View style={styles.footerRow}>
@@ -62,6 +59,16 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
             </Pressable>
             <Pressable onPress={onClose}>
               <Text style={styles.linkText}>Not Now</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.legalRow}>
+            <Pressable onPress={() => void Linking.openURL(PRIVACY_URL)}>
+              <Text style={styles.legalText}>Privacy Policy</Text>
+            </Pressable>
+            <Text style={styles.legalDot}>•</Text>
+            <Pressable onPress={() => void Linking.openURL(TERMS_URL)}>
+              <Text style={styles.legalText}>Terms of Use</Text>
             </Pressable>
           </View>
         </View>
@@ -120,5 +127,21 @@ const styles = StyleSheet.create({
   linkText: {
     color: '#A1A1AA',
     fontSize: 13,
+  },
+  legalRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 4,
+  },
+  legalText: {
+    color: '#71717A',
+    fontSize: 12,
+    textDecorationLine: 'underline',
+  },
+  legalDot: {
+    color: '#71717A',
+    fontSize: 12,
   },
 });

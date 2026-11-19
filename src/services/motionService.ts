@@ -1,3 +1,4 @@
+import { getLocalDateKey } from '../engine/candleMath';
 import { evaluateCandleState } from '../engine/candleStateMachine';
 import { CandleSnapshot, UserSettings } from '../types/wick';
 import { LocalStorageService } from './storageService';
@@ -74,10 +75,14 @@ export class MotionCoordinator {
   ): Promise<CandleSnapshot> {
     return this.enqueue(currentSnapshot, async () => {
       const latestSaved = this.storage.loadSnapshot() ?? currentSnapshot;
-      const mergedSteps = Math.max(
-        latestSaved.stepsToday,
-        this.lastHealthKitSteps + Math.max(0, Math.round(pedometerSessionSteps))
-      );
+      const isSameDay = latestSaved.dateKey === getLocalDateKey(now);
+      if (!isSameDay) {
+        this.lastHealthKitSteps = 0;
+      }
+      const deltaSteps = Math.max(0, Math.round(pedometerSessionSteps));
+      const mergedSteps = isSameDay
+        ? Math.max(latestSaved.stepsToday, this.lastHealthKitSteps + deltaSteps)
+        : deltaSteps;
 
       const { snapshot, completedDayLayer } = evaluateCandleState({
         snapshot: latestSaved,

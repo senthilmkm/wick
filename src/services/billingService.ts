@@ -44,8 +44,10 @@ export async function purchaseProPackage(apiKey?: string): Promise<{
   sandboxFallback: boolean;
 }> {
   if (!apiKey) {
-    // TestFlight / pre-RevenueCat key fallback
-    return { purchased: true, sandboxFallback: true };
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      return { purchased: true, sandboxFallback: true };
+    }
+    return { purchased: false, sandboxFallback: false };
   }
   try {
     const offerings = await Purchases.getOfferings();

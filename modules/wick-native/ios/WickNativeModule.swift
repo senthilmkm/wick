@@ -39,7 +39,14 @@ public class WickNativeModule: Module {
       let zone = CKRecordZone(zoneID: self.zoneID)
       privateDB.save(zone) { _, _ in
         let recID = CKRecord.ID(recordName: self.recordName, zoneID: self.zoneID)
-        privateDB.fetch(withRecordID: recID) { existing, _ in
+        privateDB.fetch(withRecordID: recID) { existing, fetchError in
+          if let ckErr = fetchError as? CKError, ckErr.code != .unknownItem {
+            promise.reject("CK_FETCH_ERR", ckErr.localizedDescription)
+            return
+          } else if existing == nil, let fetchError, !(fetchError is CKError) {
+            promise.reject("CK_FETCH_ERR", fetchError.localizedDescription)
+            return
+          }
           let record = existing ?? CKRecord(recordType: self.recordType, recordID: recID)
           record["displayName"] = displayName as CKRecordValue
           record["state"] = state as CKRecordValue
@@ -62,7 +69,26 @@ public class WickNativeModule: Module {
       let zone = CKRecordZone(zoneID: self.zoneID)
       privateDB.save(zone) { _, _ in
         let recID = CKRecord.ID(recordName: self.recordName, zoneID: self.zoneID)
-        privateDB.fetch(withRecordID: recID) { existing, _ in
+        privateDB.fetch(withRecordID: recID) { existing, fetchError in
+          if let ckErr = fetchError as? CKError, ckErr.code != .unknownItem {
+            promise.reject("CK_FETCH_ERR", ckErr.localizedDescription)
+            return
+          } else if existing == nil, let fetchError, !(fetchError is CKError) {
+            promise.reject("CK_FETCH_ERR", fetchError.localizedDescription)
+            return
+          }
+          if let existingShareRef = existing?.share {
+            privateDB.fetch(withRecordID: existingShareRef.recordID) { shareRecord, shareErr in
+              if let shareErr {
+                promise.reject("CK_SHARE_ERR", shareErr.localizedDescription)
+              } else if let existingShare = shareRecord as? CKShare {
+                promise.resolve(existingShare.url?.absoluteString ?? "")
+              } else {
+                promise.resolve("")
+              }
+            }
+            return
+          }
           let root = existing ?? CKRecord(recordType: self.recordType, recordID: recID)
           if existing == nil {
             root["displayName"] = "Friend" as CKRecordValue
@@ -74,11 +100,17 @@ public class WickNativeModule: Module {
           let share = CKShare(rootRecord: root)
           share[CKShare.SystemFieldKey.title] = "Wick Candle" as CKRecordValue
           share.publicPermission = .readOnly
+          var savedShareUrl: String?
           let op = CKModifyRecordsOperation(recordsToSave: [root, share], recordIDsToDelete: nil)
+          op.perRecordSaveBlock = { _, saveResult in
+            if case .success(let savedRecord) = saveResult, let savedShare = savedRecord as? CKShare {
+              savedShareUrl = savedShare.url?.absoluteString
+            }
+          }
           op.modifyRecordsResultBlock = { result in
             switch result {
             case .success:
-              promise.resolve(share.url?.absoluteString ?? "")
+              promise.resolve(savedShareUrl ?? share.url?.absoluteString ?? "")
             case .failure(let err):
               promise.reject("CK_SHARE_ERR", err.localizedDescription)
             }

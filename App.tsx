@@ -197,6 +197,7 @@ function WickRoot() {
   const previousBrightnessRef = useRef<number | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stepsTodayRef = useRef(0);
 
   const [settings, setSettings] = useState<UserSettings>(() => storageService.loadSettings());
   const [waxLayers, setWaxLayers] = useState<WaxLayer[]>(() => storageService.loadWaxLayers());
@@ -234,6 +235,10 @@ function WickRoot() {
   });
 
   const theme = getThemeById(settings.themeId);
+
+  useEffect(() => {
+    stepsTodayRef.current = snapshot.stepsToday;
+  }, [snapshot.stepsToday]);
 
   const showToast = useCallback((msg: string) => {
     setStatusMessage(msg);
@@ -454,7 +459,7 @@ function WickRoot() {
         showToast('This Spark Request has expired.');
         return;
       }
-      rescueBaselineStepsRef.current = snapshot.stepsToday;
+      rescueBaselineStepsRef.current = stepsTodayRef.current;
       setActiveRescue(startSparkRescue(token));
       setActiveTab('circle');
       showToast(`Walk 500 steps to rescue ${token.senderName}'s wick!`);
@@ -463,7 +468,7 @@ function WickRoot() {
     void Linking.getInitialURL().then(handleIncomingUrl);
     const sub = Linking.addEventListener('url', ({ url }) => handleIncomingUrl(url));
     return () => sub.remove();
-  }, [showToast, snapshot.stepsToday]);
+  }, [showToast]);
 
   // Sync HealthKit & live CoreMotion pedometer while foregrounded
   useEffect(() => {
@@ -667,6 +672,7 @@ function WickRoot() {
               setSnapshot((prev) => {
                 const next = triggerNightBlowOut(prev, Date.now());
                 storageService.saveSnapshot(next, Date.now());
+                void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(next));
                 return next;
               });
               showToast('Goodnight. Wax is cooling.');
@@ -743,6 +749,7 @@ function WickRoot() {
       setSnapshot((prev) => {
         const next = triggerNightBlowOut(prev, Date.now());
         storageService.saveSnapshot(next, Date.now());
+        void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(next));
         return next;
       });
       showToast('Goodnight. Wax is cooling.');
@@ -932,6 +939,7 @@ function WickRoot() {
     });
     setSnapshot(res.snapshot);
     storageService.saveSnapshot(res.snapshot, Date.now());
+    void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(res.snapshot));
     if (res.completedDayLayer) {
       const nextLayers = storageService.appendWaxLayer(res.completedDayLayer);
       setWaxLayers(nextLayers);
@@ -957,6 +965,7 @@ function WickRoot() {
             setSnapshot((prev) => {
               const next = igniteWithLighter(prev, Date.now());
               storageService.saveSnapshot(next, Date.now());
+              void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(next));
               return next;
             });
             showToast('Wick lit! Walk to keep the flame blazing.');
@@ -976,7 +985,9 @@ function WickRoot() {
             if (res.activated) {
               setSnapshot(res.snapshot);
               storageService.saveSnapshot(res.snapshot, Date.now());
+              void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(res.snapshot));
               void storageService.markStarterDomeClaimed();
+              setEntitlement((e) => ({ ...e, starterDomeClaimed: true }));
               showToast('Glass Dome active — flame protected from wind.');
             } else if (res.reason) {
               showToast(res.reason);
@@ -986,6 +997,7 @@ function WickRoot() {
             const next = removeGlassDome(snapshot, Date.now());
             setSnapshot(next);
             storageService.saveSnapshot(next, Date.now());
+            void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(next));
             showToast('Glass Dome lifted.');
           }}
           onBlowOutNight={() => {
@@ -1051,10 +1063,11 @@ function WickRoot() {
             void restoreProPurchases(REVENUECAT_IOS_KEY).then((restored) => {
               if (restored) {
                 kvSet(KEY_PRO_CACHE, '1');
+                void SecureStore.setItemAsync(SECURE_PRO, '1');
                 setEntitlement((e) => ({ ...e, isPro: true, isEligibleForIntroTrial: false }));
                 showToast('Wick Pro restored!');
               } else {
-                showToast('No active Pro subscription found.');
+                showToast('No previous Wick Pro purchase found.');
               }
             });
           }}
@@ -1097,7 +1110,7 @@ function WickRoot() {
               setEntitlement((e) => ({ ...e, isPro: true, isEligibleForIntroTrial: false }));
               showToast('Wick Pro restored!');
             } else {
-              showToast('No active Pro subscription found.');
+              showToast('No previous Wick Pro purchase found.');
             }
           });
         }}

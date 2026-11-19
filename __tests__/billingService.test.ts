@@ -45,11 +45,20 @@ describe('billingService', () => {
     expect(await checkProEntitlement('key')).toBe(false);
   });
 
-  it('purchases Pro via RevenueCat or TestFlight fallback when key is unset', async () => {
+  it('purchases Pro via RevenueCat or dev fallback when key is unset', async () => {
+    const g = globalThis as { __DEV__?: boolean };
+    g.__DEV__ = true;
     expect(await purchaseProPackage(undefined)).toEqual({
       purchased: true,
       sandboxFallback: true,
     });
+
+    g.__DEV__ = false;
+    expect(await purchaseProPackage(undefined)).toEqual({
+      purchased: false,
+      sandboxFallback: false,
+    });
+    delete g.__DEV__;
 
     mockGetOfferings.mockResolvedValueOnce({ current: { availablePackages: [] } });
     expect(await purchaseProPackage('key')).toEqual({

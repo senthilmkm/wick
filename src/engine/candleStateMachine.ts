@@ -62,6 +62,14 @@ export function createMorningSnapshot(
   };
 }
 
+function daysBetweenDateKeys(fromKey: string, toKey: string): number {
+  const [fy, fm, fd] = fromKey.split('-').map(Number);
+  const [ty, tm, td] = toKey.split('-').map(Number);
+  const fromUtc = Date.UTC(fy, fm - 1, fd);
+  const toUtc = Date.UTC(ty, tm - 1, td);
+  return Math.round((toUtc - fromUtc) / 86_400_000);
+}
+
 /**
  * Pure, deterministic evaluation of the candle state given updated step count & current time.
  */
@@ -94,7 +102,8 @@ export function evaluateCandleState(input: StepEvaluationInput): StepEvaluationR
       };
     }
 
-    const nextStreak = survived ? current.streakDays + 1 : 0;
+    const missedIntermediateDay = daysBetweenDateKeys(current.dateKey, currentDateKey) > 1;
+    const nextStreak = survived && !missedIntermediateDay ? current.streakDays + 1 : 0;
     const nextWaxGrams = survived ? current.waxGrams + waxSpec.waxGramsEarned : current.waxGrams;
     current = createMorningSnapshot(
       currentDateKey,
@@ -130,7 +139,21 @@ export function evaluateCandleState(input: StepEvaluationInput): StepEvaluationR
     };
   }
 
-  // 3. Check Sleep Focus freeze (Night Mode)
+  // 3. If already permanently extinguished today, stay extinguished until Spark Rescue
+  if (current.state === 'EXTINGUISHED') {
+    return {
+      completedDayLayer,
+      snapshot: {
+        ...current,
+        stepsToday: safeSteps,
+        flameIntensity: 0,
+        flameColorHex: getFlameColorHex('EXTINGUISHED'),
+        updatedAt: nowMs,
+      },
+    };
+  }
+
+  // 4. Check Sleep Focus freeze (Night Mode)
   if (
     (isSleepFocusActive && settings.sleepFocusSyncEnabled) ||
     current.state === 'NIGHT_SLEEP'
@@ -143,20 +166,6 @@ export function evaluateCandleState(input: StepEvaluationInput): StepEvaluationR
         stepsToday: safeSteps,
         flameIntensity: computeFlameIntensity('NIGHT_SLEEP', current.paceRatio),
         flameColorHex: getFlameColorHex('NIGHT_SLEEP'),
-        updatedAt: nowMs,
-      },
-    };
-  }
-
-  // 4. If already permanently extinguished today, stay extinguished until Spark Rescue
-  if (current.state === 'EXTINGUISHED') {
-    return {
-      completedDayLayer,
-      snapshot: {
-        ...current,
-        stepsToday: safeSteps,
-        flameIntensity: 0,
-        flameColorHex: getFlameColorHex('EXTINGUISHED'),
         updatedAt: nowMs,
       },
     };
