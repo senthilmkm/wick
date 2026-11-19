@@ -198,6 +198,7 @@ function WickRoot() {
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stepsTodayRef = useRef(0);
+  const manualBlowArmedUntilRef = useRef(0);
 
   const [settings, setSettings] = useState<UserSettings>(() => storageService.loadSettings());
   const [waxLayers, setWaxLayers] = useState<WaxLayer[]>(() => storageService.loadWaxLayers());
@@ -241,12 +242,16 @@ function WickRoot() {
 
   const entitlementRef = useRef(entitlement);
   const friendsRef = useRef(friends);
+  const settingsRef = useRef(settings);
   useEffect(() => {
     entitlementRef.current = entitlement;
   }, [entitlement]);
   useEffect(() => {
     friendsRef.current = friends;
   }, [friends]);
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
 
   useEffect(() => {
     stepsTodayRef.current = snapshot.stepsToday;
@@ -278,7 +283,7 @@ function WickRoot() {
         const res = evaluateCandleState({
           snapshot: prev,
           stepsToday: monotonicSteps,
-          settings,
+          settings: settingsRef.current,
           now,
         });
         void notifySmokingGraceIfNeeded(prev.state, res.snapshot.state);
@@ -309,7 +314,7 @@ function WickRoot() {
         return updated;
       });
     },
-    [settings, showToast]
+    [showToast]
   );
 
   const syncHealthKit = useCallback(async () => {
@@ -683,11 +688,13 @@ function WickRoot() {
             settings.sleepHour,
             settings.sleepMinute
           );
+          const manualArmed = Date.now() <= manualBlowArmedUntilRef.current;
           if (
-            inNightWindow &&
+            (inNightWindow || manualArmed) &&
             settings.micBlowOutEnabled &&
             detector.processMeteringSample(st.metering)
           ) {
+            manualBlowArmedUntilRef.current = 0;
             void detector.stopBlowModal().then(() => {
               setWindIntensity(0);
               void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -749,9 +756,25 @@ function WickRoot() {
     };
   }, [activeTab, scheduleAutoHide]);
 
+  useEffect(() => {
+    if (!onboarded || activeTab !== 'circle') {
+      return;
+    }
+    void cloudKitService
+      .refreshFriendCandles()
+      .then((remoteFriends) => {
+        if (remoteFriends.length > 0) {
+          setFriends(remoteFriends);
+          kvSet(KEY_FRIENDS, JSON.stringify(remoteFriends));
+        }
+      })
+      .catch(() => {});
+  }, [activeTab, onboarded]);
+
   const handleUpdateSettings = (partial: Partial<UserSettings>) => {
     setSettings((prev) => {
       const next = { ...prev, ...partial };
+      settingsRef.current = next;
       storageService.saveSettings(next);
       void SecureStore.setItemAsync(SECURE_SETTINGS, JSON.stringify(next)).catch(() => {});
       if (partial.wakeHour !== undefined || partial.wakeMinute !== undefined) {
@@ -784,6 +807,7 @@ function WickRoot() {
 
     // Avoid dual Audio.Recording race condition when liveBreezeEnabled already holds the mic
     if (settings.liveBreezeEnabled && activeTab === 'flame') {
+      manualBlowArmedUntilRef.current = Date.now() + 8000;
       showToast('Blow into your mic now to extinguish...');
       return;
     }
@@ -894,15 +918,17 @@ function WickRoot() {
       return;
     }
     try {
-      await Share.share({
+      const shareRes = await Share.share({
         title: 'My Wick Today',
         message: `Day ${snapshot.streakDays} • My wick is ${snapshot.state
           .toLowerCase()
           .replace('_', ' ')} (${snapshot.stepsToday.toLocaleString('en-US')} steps today) — Keep your wick lit!`,
       });
-      const updated = recordVideoExport(entitlement, now);
-      setEntitlement(updated);
-      await storageService.saveVideoExportQuota(updated.weekKey, updated.freeVideoExportsThisWeek);
+      if (shareRes.action !== Share.dismissedAction) {
+        const updated = recordVideoExport(entitlement, now);
+        setEntitlement(updated);
+        await storageService.saveVideoExportQuota(updated.weekKey, updated.freeVideoExportsThisWeek);
+      }
     } catch {
       showToast('Could not open Share Sheet.');
     }
