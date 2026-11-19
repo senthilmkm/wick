@@ -1,4 +1,4 @@
-import { CandleMood, CandleState } from '../types/wick';
+import { CandleMood, CandleState, WaxLayer } from '../types/wick';
 
 export const CANDLE_MOOD_COLORS: Record<CandleMood, string> = {
   Calm: '#7FA99B',
@@ -257,4 +257,89 @@ export function isNighttimeWindow(
     return nowMin >= bedStart || nowMin < wakeTotal;
   }
   return nowMin >= bedStart && nowMin < wakeTotal;
+}
+
+export interface WeeklyRecapBand {
+  dateKey: string;
+  colorHex: string;
+  lit: boolean;
+}
+
+export interface WeeklyRecapSummary {
+  dateRangeLabel: string;
+  totalSteps: number;
+  daysLit: number;
+  topMood: CandleMood | null;
+  bands: WeeklyRecapBand[];
+}
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+export function buildWeeklyRecapSummary(
+  layers: WaxLayer[],
+  todaySteps: number,
+  dailyStepGoal: number,
+  todayDateKey: string,
+  todayMood?: CandleMood
+): WeeklyRecapSummary {
+  const [y, m, d] = todayDateKey.split('-').map(Number);
+  const endUtc = Date.UTC(y, m - 1, d);
+  const layerMap = new Map<string, WaxLayer>();
+  for (const l of layers) {
+    layerMap.set(l.date, l);
+  }
+
+  const bands: WeeklyRecapBand[] = [];
+  const moodCounts = new Map<CandleMood, number>();
+  let totalSteps = 0;
+  let daysLit = 0;
+
+  for (let offset = 6; offset >= 0; offset -= 1) {
+    const dt = new Date(endUtc - offset * 86_400_000);
+    const key = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(
+      dt.getUTCDate()
+    ).padStart(2, '0')}`;
+    if (key === todayDateKey) {
+      const todaySpec = deriveWaxLayerSpec(todaySteps, dailyStepGoal);
+      const colorHex = todayMood ? getMoodWaxColorHex(todayMood) : todaySpec.colorHex;
+      const lit = todaySteps > 0;
+      if (lit) {
+        daysLit += 1;
+      }
+      totalSteps += Math.max(0, todaySteps);
+      if (todayMood) {
+        moodCounts.set(todayMood, (moodCounts.get(todayMood) ?? 0) + 1);
+      }
+      bands.push({ dateKey: key, colorHex, lit });
+    } else {
+      const layer = layerMap.get(key);
+      if (layer) {
+        daysLit += 1;
+        totalSteps += layer.stepsAchieved;
+        if (layer.mood) {
+          moodCounts.set(layer.mood, (moodCounts.get(layer.mood) ?? 0) + 1);
+        }
+        bands.push({ dateKey: key, colorHex: layer.colorHex, lit: true });
+      } else {
+        bands.push({ dateKey: key, colorHex: '#27272A', lit: false });
+      }
+    }
+  }
+
+  let topMood: CandleMood | null = null;
+  let topCount = 0;
+  for (const [mood, count] of moodCounts.entries()) {
+    if (count > topCount) {
+      topMood = mood;
+      topCount = count;
+    }
+  }
+
+  const startDt = new Date(endUtc - 6 * 86_400_000);
+  const endDt = new Date(endUtc);
+  const dateRangeLabel = `${MONTH_NAMES[startDt.getUTCMonth()]} ${startDt.getUTCDate()} – ${
+    MONTH_NAMES[endDt.getUTCMonth()]
+  } ${endDt.getUTCDate()}`;
+
+  return { dateRangeLabel, totalSteps, daysLit, topMood, bands };
 }

@@ -43,6 +43,7 @@ export interface UserSettings {
   lanternModeEnabled: boolean;
   sleepFocusSyncEnabled: boolean;
   soundEffectsEnabled: boolean;
+  eveningNudgeEnabled?: boolean;
   candleName?: string;
 }
 

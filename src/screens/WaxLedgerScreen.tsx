@@ -1,8 +1,13 @@
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { deriveWaxLayerSpec } from '../engine/candleMath';
+import React, { useState } from 'react';
+import { Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import {
+  buildWeeklyRecapSummary,
+  CANDLE_MOOD_COLORS,
+  deriveWaxLayerSpec,
+  getLocalDateKey,
+} from '../engine/candleMath';
 import { getVisibleLedgerLimit } from '../engine/trialGuard';
-import { EntitlementState, WaxLayer, WickTheme } from '../types/wick';
+import { CandleMood, EntitlementState, WaxLayer, WickTheme } from '../types/wick';
 
 const MILESTONES = [
   { days: 7, label: 'Bronze Band', color: '#CD7F32' },
@@ -17,6 +22,8 @@ interface WaxLedgerScreenProps {
   waxGrams: number;
   todaySteps?: number;
   dailyStepGoal?: number;
+  todayMood?: CandleMood;
+  todayDateKey?: string;
   candleName?: string;
   theme: WickTheme;
   entitlement: EntitlementState;
@@ -30,17 +37,22 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
   waxGrams,
   todaySteps = 0,
   dailyStepGoal = 8000,
+  todayMood,
+  todayDateKey = getLocalDateKey(new Date()),
   candleName,
   theme,
   entitlement,
   onExportPdf,
   onUpgradePro,
 }) => {
+  const [showRecap, setShowRecap] = useState(false);
   const limit = getVisibleLedgerLimit(entitlement);
   const visibleLayers = [...layers].reverse().slice(0, limit);
   const todaySpec = deriveWaxLayerSpec(todaySteps, dailyStepGoal);
   const nextMilestone = MILESTONES.find((m) => streakDays < m.days) ?? MILESTONES[MILESTONES.length - 1];
   const milestonePct = Math.min(100, Math.round((streakDays / nextMilestone.days) * 100));
+  const recap = buildWeeklyRecapSummary(layers, todaySteps, dailyStepGoal, todayDateKey, todayMood);
+  const titlePrefix = candleName?.trim() ? candleName.trim().toUpperCase() : 'WICK';
 
   return (
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
@@ -53,12 +65,17 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
             {streakDays} day streak • {waxGrams}g wax earned
           </Text>
         </View>
-        <Pressable
-          style={[styles.pdfBtn, { backgroundColor: theme.accent }]}
-          onPress={entitlement.isPro ? onExportPdf : onUpgradePro}
-        >
-          <Text style={styles.pdfBtnText}>{entitlement.isPro ? 'PDF' : 'Pro PDF'}</Text>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable style={styles.weekBtn} onPress={() => setShowRecap(true)}>
+            <Text style={styles.weekBtnText}>Week</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.pdfBtn, { backgroundColor: theme.accent }]}
+            onPress={entitlement.isPro ? onExportPdf : onUpgradePro}
+          >
+            <Text style={styles.pdfBtnText}>{entitlement.isPro ? 'PDF' : 'Pro PDF'}</Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* Streak Milestone Progress */}
@@ -154,6 +171,79 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
           </Text>
         </Pressable>
       )}
+
+      <Modal
+        visible={showRecap}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowRecap(false)}
+      >
+        <View style={styles.recapBackdrop}>
+          <View style={styles.recapCard}>
+            <View style={styles.recapGlow} />
+            <Text style={styles.recapBadge}>{titlePrefix} • WEEK IN WAX</Text>
+            <Text style={styles.recapDates}>{recap.dateRangeLabel}</Text>
+
+            <View style={styles.ribbonRow}>
+              {recap.bands.map((band) => (
+                <View
+                  key={band.dateKey}
+                  style={[
+                    styles.ribbonSegment,
+                    { backgroundColor: band.colorHex, opacity: band.lit ? 1 : 0.35 },
+                  ]}
+                />
+              ))}
+            </View>
+
+            <View style={styles.recapStatsRow}>
+              <View style={styles.recapStatBox}>
+                <Text style={styles.recapStatVal}>
+                  {recap.totalSteps.toLocaleString('en-US')}
+                </Text>
+                <Text style={styles.recapStatLabel}>Steps</Text>
+              </View>
+              <View style={styles.recapStatBox}>
+                <Text style={styles.recapStatVal}>{recap.daysLit} / 7</Text>
+                <Text style={styles.recapStatLabel}>Days Lit</Text>
+              </View>
+              <View style={styles.recapStatBox}>
+                <View style={styles.recapMoodRow}>
+                  {recap.topMood && (
+                    <View
+                      style={[
+                        styles.recapMoodDot,
+                        { backgroundColor: CANDLE_MOOD_COLORS[recap.topMood] },
+                      ]}
+                    />
+                  )}
+                  <Text style={styles.recapStatVal}>{recap.topMood ?? '—'}</Text>
+                </View>
+                <Text style={styles.recapStatLabel}>Top Mood</Text>
+              </View>
+            </View>
+
+            <Pressable
+              style={[styles.recapShareBtn, { backgroundColor: theme.accent }]}
+              onPress={() => {
+                void Share.share({
+                  title: `${titlePrefix} • Week in Wax`,
+                  message: `${titlePrefix} (${recap.dateRangeLabel}): ${recap.totalSteps.toLocaleString(
+                    'en-US'
+                  )} steps • ${recap.daysLit}/7 days lit${
+                    recap.topMood ? ` • Top mood: ${recap.topMood}` : ''
+                  } — Keep your wick lit!`,
+                });
+              }}
+            >
+              <Text style={styles.recapShareText}>Share Week</Text>
+            </Pressable>
+            <Pressable style={styles.recapDoneBtn} onPress={() => setShowRecap(false)}>
+              <Text style={styles.recapDoneText}>Done</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -169,6 +259,14 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 28, fontWeight: '700' },
   subtitle: { color: '#A1A1AA', fontSize: 14, marginTop: 2 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  weekBtn: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+  weekBtnText: { color: '#F5F5F7', fontWeight: '600', fontSize: 13 },
   pdfBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16 },
   pdfBtnText: { color: '#0A0A0C', fontWeight: '700', fontSize: 13 },
   emptyCard: {
@@ -235,4 +333,42 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 12,
   },
+  recapBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.78)',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  recapCard: {
+    backgroundColor: '#121216',
+    borderRadius: 24,
+    padding: 24,
+    gap: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,159,67,0.22)',
+  },
+  recapGlow: {
+    position: 'absolute',
+    top: -40,
+    left: '20%',
+    right: '20%',
+    height: 100,
+    borderRadius: 60,
+    backgroundColor: 'rgba(255,159,67,0.16)',
+  },
+  recapBadge: { color: '#FF9F43', fontSize: 12, fontWeight: '700', letterSpacing: 1.4 },
+  recapDates: { color: '#A1A1AA', fontSize: 13, marginTop: -10 },
+  ribbonRow: { flexDirection: 'row', gap: 6, height: 14, marginVertical: 4 },
+  ribbonSegment: { flex: 1, borderRadius: 4 },
+  recapStatsRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
+  recapStatBox: { alignItems: 'center', flex: 1, gap: 4 },
+  recapStatVal: { color: '#F5F5F7', fontSize: 17, fontWeight: '700' },
+  recapStatLabel: { color: '#71717A', fontSize: 12 },
+  recapMoodRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  recapMoodDot: { width: 10, height: 10, borderRadius: 5 },
+  recapShareBtn: { paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginTop: 4 },
+  recapShareText: { color: '#0A0A0C', fontSize: 15, fontWeight: '700' },
+  recapDoneBtn: { alignItems: 'center', paddingVertical: 6 },
+  recapDoneText: { color: '#A1A1AA', fontSize: 13 },
 });

@@ -212,6 +212,16 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
         </View>
 
         <View style={styles.row}>
+          <Text style={[styles.rowLabel, { color: theme.primaryText }]}>
+            Evening Last-Light Nudge
+          </Text>
+          <Switch
+            value={settings.eveningNudgeEnabled !== false}
+            onValueChange={(val) => onUpdateSettings({ eveningNudgeEnabled: val })}
+          />
+        </View>
+
+        <View style={styles.row}>
           <Text style={[styles.rowLabel, { color: theme.primaryText }]}>Candle Name</Text>
           <TextInput
             style={styles.nameInput}

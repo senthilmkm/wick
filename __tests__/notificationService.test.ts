@@ -44,7 +44,22 @@ describe('notificationService', () => {
     mockGetPermissionsAsync.mockResolvedValueOnce({ status: 'granted' });
     await scheduleMorningWakeNotification(DEFAULT_SETTINGS);
     expect(mockCancelAll).toHaveBeenCalledTimes(1);
-    expect(mockSchedule).toHaveBeenCalledTimes(1);
+    expect(mockSchedule).toHaveBeenCalledTimes(2);
+
+    mockGetPermissionsAsync.mockResolvedValueOnce({ status: 'granted' });
+    await scheduleMorningWakeNotification({
+      ...DEFAULT_SETTINGS,
+      eveningNudgeEnabled: false,
+      candleName: 'Solace',
+    });
+    expect(mockSchedule).toHaveBeenCalledTimes(3);
+
+    mockGetPermissionsAsync.mockResolvedValueOnce({ status: 'granted' });
+    await scheduleMorningWakeNotification({
+      ...DEFAULT_SETTINGS,
+      candleName: 'Solace',
+    });
+    expect(mockSchedule).toHaveBeenCalledTimes(5);
 
     mockGetPermissionsAsync.mockResolvedValueOnce({ status: 'granted' });
     mockCancelAll.mockRejectedValueOnce(new Error('boom'));

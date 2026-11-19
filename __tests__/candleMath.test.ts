@@ -1,4 +1,5 @@
 import {
+  buildWeeklyRecapSummary,
   clamp,
   computeDayProgress,
   computeExpectedSteps,
@@ -143,5 +144,44 @@ describe('candleMath', () => {
     expect(getMoodWaxColorHex('Calm')).toBe('#7FA99B');
     expect(getMoodWaxColorHex('Grateful')).toBe('#F4B942');
     expect(getMoodWaxColorHex('Heavy')).toBe('#6D597A');
+  });
+
+  it('builds 7-day weekly recap summary with moods, missing days, and today progress', () => {
+    const recap = buildWeeklyRecapSummary(
+      [
+        {
+          id: '1',
+          date: '2026-11-17',
+          colorHex: '#F4B942',
+          thicknessMm: 4,
+          stepsAchieved: 8500,
+          stepGoal: 8000,
+          peakIntensity: 1,
+          mood: 'Grateful',
+        },
+        {
+          id: '2',
+          date: '2026-11-18',
+          colorHex: '#FF9E2C',
+          thicknessMm: 3,
+          stepsAchieved: 6000,
+          stepGoal: 8000,
+          peakIntensity: 0.8,
+        },
+      ],
+      4000,
+      8000,
+      '2026-11-19',
+      'Calm'
+    );
+    expect(recap.dateRangeLabel).toBe('Nov 13 – Nov 19');
+    expect(recap.daysLit).toBe(3);
+    expect(recap.totalSteps).toBe(18500);
+    expect(recap.topMood).toBe('Grateful');
+    expect(recap.bands).toHaveLength(7);
+
+    const emptyRecap = buildWeeklyRecapSummary([], 0, 8000, '2026-11-19');
+    expect(emptyRecap.daysLit).toBe(0);
+    expect(emptyRecap.topMood).toBeNull();
   });
 });

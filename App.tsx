@@ -845,7 +845,14 @@ function WickRoot() {
       settingsRef.current = next;
       storageService.saveSettings(next);
       void SecureStore.setItemAsync(SECURE_SETTINGS, JSON.stringify(next)).catch(() => {});
-      if (partial.wakeHour !== undefined || partial.wakeMinute !== undefined) {
+      if (
+        partial.wakeHour !== undefined ||
+        partial.wakeMinute !== undefined ||
+        partial.sleepHour !== undefined ||
+        partial.sleepMinute !== undefined ||
+        partial.eveningNudgeEnabled !== undefined ||
+        partial.candleName !== undefined
+      ) {
         void scheduleMorningWakeNotification(next);
       }
       return next;
@@ -1182,6 +1189,8 @@ function WickRoot() {
           waxGrams={snapshot.waxGrams}
           todaySteps={snapshot.stepsToday}
           dailyStepGoal={settings.dailyStepGoal}
+          todayMood={snapshot.mood}
+          todayDateKey={snapshot.dateKey}
           candleName={settings.candleName}
           theme={theme}
           entitlement={{

@@ -32,6 +32,21 @@ export async function scheduleMorningWakeNotification(settings: UserSettings): P
         minute: settings.wakeMinute,
       },
     });
+    if (settings.eveningNudgeEnabled !== false) {
+      const nudgeTotalMin = (settings.sleepHour * 60 + settings.sleepMinute - 90 + 1440) % 1440;
+      const candleLabel = settings.candleName?.trim() || 'Your wick';
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: `${candleLabel} • Last Light`,
+          body: 'A quick 10-minute evening walk keeps tonight’s wax band bright.',
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DAILY,
+          hour: Math.floor(nudgeTotalMin / 60),
+          minute: nudgeTotalMin % 60,
+        },
+      });
+    }
   } catch {
     // Graceful no-op on simulator or denied permissions
   }

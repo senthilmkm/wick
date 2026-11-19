@@ -39,6 +39,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   lanternModeEnabled: false,
   sleepFocusSyncEnabled: true,
   soundEffectsEnabled: true,
+  eveningNudgeEnabled: true,
 };
 
 export class LocalStorageService {
