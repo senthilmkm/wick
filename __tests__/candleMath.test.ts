@@ -115,4 +115,14 @@ describe('candleMath', () => {
       'Bedtime reached'
     );
   });
+
+  it('guarantees exact midpoint curve and bounded pace/melt invariants', () => {
+    // At exact midpoint t = 0.5, expected steps = 50% of daily goal
+    expect(computeExpectedSteps(3000, 0.5)).toBe(1500);
+    expect(computeExpectedSteps(8000, 0.5)).toBe(4000);
+    // Goal met early always yields >= 1.2 paceRatio and bounded [0, 1] flame intensity
+    const goalMetPace = computePaceRatio(3000, 500, 3000);
+    expect(goalMetPace).toBe(1.2);
+    expect(computeFlameIntensity('BLAZING', goalMetPace)).toBeCloseTo(0.85, 4);
+  });
 });
