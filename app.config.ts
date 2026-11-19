@@ -36,14 +36,16 @@ const config: ExpoConfig = {
       'aps-environment': 'production',
     },
     infoPlist: {
+      CFBundleDisplayName: 'Wick',
+      ITSAppUsesNonExemptEncryption: false,
       NSHealthShareUsageDescription:
-        "Wick reads your daily step count and sleep schedule to animate your candle's brightness and freeze decay while you sleep. Your health data never leaves your device.",
+        'Wick reads your daily step count from Apple Health to light your candle, animate its flame brightness, and track your daily streak.',
       NSMotionUsageDescription:
         'Wick uses step motion to light your candle on your first step and animate the flame in real time.',
       NSMicrophoneUsageDescription:
-        'Wick listens for a gentle blow into the microphone when you choose to blow out your candle at bedtime.',
+        'Wick uses the microphone to detect when you blow out your candle at bedtime and animate the flame in a breeze.',
       CKSharingSupported: true,
-      UIBackgroundModes: ['fetch', 'remote-notification'],
+      UIBackgroundModes: ['remote-notification'],
     },
     privacyManifests: {
       NSPrivacyAccessedAPITypes: [
@@ -63,7 +65,7 @@ const config: ExpoConfig = {
       '@kingstinct/react-native-healthkit',
       {
         NSHealthShareUsageDescription:
-          "Wick reads your daily step count and sleep schedule to animate your candle's brightness and freeze decay while you sleep. Your health data never leaves your device.",
+          'Wick reads your daily step count from Apple Health to light your candle, animate its flame brightness, and track your daily streak.',
         background: true,
       },
     ],
