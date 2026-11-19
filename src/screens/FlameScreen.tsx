@@ -138,12 +138,11 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
         </View>
       )}
 
-      {/* Smoking Grace Countdown (Only shown when urgent) */}
-      {snapshot.state === 'SMOKING_GRACE' && snapshot.smokingGraceExpiresAt !== null && (
+      {/* Smoking Grace Comeback Banner (Only shown when urgent) */}
+      {snapshot.state === 'SMOKING_GRACE' && (
         <View style={styles.pacePill}>
           <Text style={[styles.paceText, { color: '#FF9F43' }]}>
-            {Math.max(1, Math.ceil((snapshot.smokingGraceExpiresAt - Date.now()) / 60000))}m left •
-            walk 350 steps or Send Spark
+            Smoking • walk 350 steps or Send Spark to rekindle
           </Text>
         </View>
       )}

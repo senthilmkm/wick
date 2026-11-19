@@ -95,17 +95,19 @@ describe('candleStateMachine & regression lifecycle', () => {
     });
     expect(rescued.snapshot.state).toBe('BLAZING');
 
-    // Expire smoking grace -> EXTINGUISHED, and remains EXTINGUISHED on further steps
-    const expired = evaluateCandleState({
+    // Stays in SMOKING_GRACE past 60 min (gentler grace until midnight)
+    const staysSmoking = evaluateCandleState({
       snapshot: smoking.snapshot,
       stepsToday: 220,
       settings,
       now: new Date(midday.getTime() + SMOKING_GRACE_DURATION_MS + 1000),
     });
-    expect(expired.snapshot.state).toBe('EXTINGUISHED');
+    expect(staysSmoking.snapshot.state).toBe('SMOKING_GRACE');
 
+    // Extinguished candle stays EXTINGUISHED on further steps
+    const alreadyExtinguished = { ...staysSmoking.snapshot, state: 'EXTINGUISHED' as const };
     const staysOut = evaluateCandleState({
-      snapshot: expired.snapshot,
+      snapshot: alreadyExtinguished,
       stepsToday: 3000,
       settings,
       now: new Date(midday.getTime() + SMOKING_GRACE_DURATION_MS + 5000),

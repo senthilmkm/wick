@@ -78,6 +78,7 @@ export function evaluateCandleState(input: StepEvaluationInput): StepEvaluationR
   if (current.dateKey !== currentDateKey) {
     const survived =
       current.state !== 'EXTINGUISHED' &&
+      current.state !== 'SMOKING_GRACE' &&
       (current.ignitedAt !== null || current.state === 'GLASS_DOME');
 
     const waxSpec = deriveWaxLayerSpec(current.stepsToday, settings.dailyStepGoal);
@@ -204,7 +205,7 @@ export function evaluateCandleState(input: StepEvaluationInput): StepEvaluationR
     };
   }
 
-  // 6. Smoking Grace Period (60-minute Resuscitation Window)
+  // 6. Smoking Grace Period (stays active until bedtime/midnight so evening walks can save the streak)
   if (current.state === 'SMOKING_GRACE') {
     const startSteps = current.smokingStartSteps ?? safeSteps;
     const burstSteps = Math.max(0, safeSteps - startSteps);
@@ -220,24 +221,6 @@ export function evaluateCandleState(input: StepEvaluationInput): StepEvaluationR
           flameIntensity: computeFlameIntensity('BLAZING', Math.max(1.05, paceRatio)),
           flameColorHex: getFlameColorHex('BLAZING'),
           meltProgress: clamp(tNorm * 0.9, 0, 1),
-          smokingGraceExpiresAt: null,
-          smokingStartSteps: null,
-          updatedAt: nowMs,
-        },
-      };
-    }
-
-    if (current.smokingGraceExpiresAt !== null && nowMs >= current.smokingGraceExpiresAt) {
-      return {
-        completedDayLayer,
-        snapshot: {
-          ...current,
-          state: 'EXTINGUISHED',
-          stepsToday: safeSteps,
-          expectedStepsNow,
-          paceRatio,
-          flameIntensity: 0,
-          flameColorHex: getFlameColorHex('EXTINGUISHED'),
           smokingGraceExpiresAt: null,
           smokingStartSteps: null,
           updatedAt: nowMs,
