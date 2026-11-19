@@ -4,7 +4,7 @@ import * as Print from 'expo-print';
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { AppState, Linking, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { MMKV } from 'react-native-mmkv';
 import { PaywallModal, PaywallReason } from './src/components/PaywallModal';
@@ -17,7 +17,13 @@ import {
   igniteWithLighter,
   triggerNightBlowOut,
 } from './src/engine/candleStateMachine';
-import { buildSparkUniversalLink, createSparkToken } from './src/engine/sparkEngine';
+import {
+  buildSparkUniversalLink,
+  createSparkToken,
+  parseSparkLink,
+  startSparkRescue,
+  updateSparkRescueProgress,
+} from './src/engine/sparkEngine';
 import {
   canAddFriend,
   canExportPdf,
@@ -38,6 +44,7 @@ import {
 } from './src/services/nativeHealthKit';
 import { DEFAULT_SETTINGS, LocalStorageService } from './src/services/storageService';
 import {
+  ActiveSparkRescue,
   CandleSnapshot,
   EntitlementState,
   FriendCandle,
@@ -82,6 +89,8 @@ export default function App() {
   const [settings, setSettings] = useState<UserSettings>(() => storageService.loadSettings());
   const [waxLayers, setWaxLayers] = useState<WaxLayer[]>(() => storageService.loadWaxLayers());
   const [friends] = useState<FriendCandle[]>([]);
+  const [activeRescue, setActiveRescue] = useState<ActiveSparkRescue | null>(null);
+  const rescueBaselineStepsRef = useRef<number | null>(null);
   const [entitlement, setEntitlement] = useState<EntitlementState>(() => ({
     isPro: mmkv.getString(KEY_PRO_CACHE) === '1',
     isEligibleForIntroTrial: true,
@@ -128,7 +137,24 @@ export default function App() {
       storageService.saveSnapshot(res.snapshot, Date.now());
       return res.snapshot;
     });
-  }, [settings]);
+
+    // Advance active 500-step Spark Rescue if user is rescuing a friend
+    setActiveRescue((prevRescue) => {
+      if (!prevRescue || prevRescue.completed) {
+        return prevRescue;
+      }
+      if (rescueBaselineStepsRef.current === null) {
+        rescueBaselineStepsRef.current = steps;
+      }
+      const walked = Math.max(0, steps - rescueBaselineStepsRef.current);
+      const updated = updateSparkRescueProgress(prevRescue, walked, Date.now());
+      if (updated.completed && !prevRescue.completed) {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        showToast(`500 steps done! ${updated.senderName}'s wick is reignited!`);
+      }
+      return updated;
+    });
+  }, [settings, showToast]);
 
   // Initialize Keychain anti-abuse state + weekly quota on mount
   useEffect(() => {
@@ -157,6 +183,31 @@ export default function App() {
       mounted = false;
     };
   }, []);
+
+  // Handle incoming Spark Rescue Universal Links (https://wick.app/spark/... or wick://spark/...)
+  useEffect(() => {
+    const handleIncomingUrl = (url: string | null) => {
+      if (!url) {
+        return;
+      }
+      const token = parseSparkLink(url);
+      if (!token) {
+        return;
+      }
+      if (Date.now() > token.expiresAt) {
+        showToast('This Spark Request has expired.');
+        return;
+      }
+      rescueBaselineStepsRef.current = snapshot.stepsToday;
+      setActiveRescue(startSparkRescue(token));
+      setActiveTab('circle');
+      showToast(`Walk 500 steps to rescue ${token.senderName}'s wick!`);
+    };
+
+    void Linking.getInitialURL().then(handleIncomingUrl);
+    const sub = Linking.addEventListener('url', ({ url }) => handleIncomingUrl(url));
+    return () => sub.remove();
+  }, [showToast, snapshot.stepsToday]);
 
   // Sync HealthKit immediately when onboarded, on foreground resume, and on HK sample changes
   useEffect(() => {
@@ -390,7 +441,7 @@ export default function App() {
       {activeTab === 'circle' && (
         <CircleScreen
           friends={friends}
-          activeRescue={null}
+          activeRescue={activeRescue}
           theme={theme}
           onInviteFriend={() => {
             void handleInviteFriend();

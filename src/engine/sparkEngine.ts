@@ -47,6 +47,35 @@ export function buildSparkUniversalLink(token: SparkRequestToken): string {
   return `https://wick.app/spark/${token.sparkId}?t=${encoded}`;
 }
 
+/**
+ * Safely parses an incoming Universal Link or wick:// deep link into a SparkRequestToken.
+ */
+export function parseSparkLink(url: string): SparkRequestToken | null {
+  try {
+    const qIdx = url.indexOf('?t=');
+    const ampIdx = qIdx === -1 ? url.indexOf('&t=') : qIdx;
+    if (ampIdx === -1) {
+      return null;
+    }
+    const rawParam = url.slice(ampIdx + 3).split('&')[0];
+    const decoded = JSON.parse(decodeURIComponent(rawParam)) as Partial<SparkRequestToken>;
+    if (
+      typeof decoded.sparkId !== 'string' ||
+      typeof decoded.senderName !== 'string' ||
+      typeof decoded.senderDeviceId !== 'string' ||
+      typeof decoded.createdAt !== 'number' ||
+      typeof decoded.expiresAt !== 'number' ||
+      typeof decoded.stepsRequired !== 'number' ||
+      typeof decoded.signature !== 'string'
+    ) {
+      return null;
+    }
+    return decoded as SparkRequestToken;
+  } catch {
+    return null;
+  }
+}
+
 export function validateSparkToken(
   token: SparkRequestToken,
   secret: string,

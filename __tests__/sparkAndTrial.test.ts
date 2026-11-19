@@ -1,6 +1,7 @@
 import {
   buildSparkUniversalLink,
   createSparkToken,
+  parseSparkLink,
   SPARK_EXPIRY_MS,
   SPARK_STEPS_REQUIRED,
   startSparkRescue,
@@ -26,7 +27,13 @@ describe('sparkEngine', () => {
   it('creates, links, validates, and tracks a 500-step Spark Rescue', () => {
     const token = createSparkToken('spk-1', '  Maya  ', 'dev-a', secret, now);
     expect(token.senderName).toBe('Maya');
-    expect(buildSparkUniversalLink(token)).toContain('https://wick.app/spark/spk-1?t=');
+    const link = buildSparkUniversalLink(token);
+    expect(link).toContain('https://wick.app/spark/spk-1?t=');
+    expect(parseSparkLink(link)).toEqual(token);
+    expect(parseSparkLink(`wick://spark/spk-1?foo=1&t=${encodeURIComponent(JSON.stringify(token))}`)).toEqual(token);
+    expect(parseSparkLink('https://wick.app/spark/spk-1')).toBeNull();
+    expect(parseSparkLink('https://wick.app/spark/spk-1?t=%7Bbad')).toBeNull();
+    expect(parseSparkLink(`https://wick.app/spark/spk-1?t=${encodeURIComponent(JSON.stringify({ sparkId: 'only-id' }))}`)).toBeNull();
 
     const blankNameToken = createSparkToken('spk-2', '   ', 'dev-a', secret, now);
     expect(blankNameToken.senderName).toBe('A friend');
