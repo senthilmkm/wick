@@ -165,14 +165,22 @@ export const InfoModal: React.FC<InfoModalProps> = ({ visible, onClose }) => {
                         />
                         <BlurMask blur={8} style="normal" />
                       </Circle>
+                      <Path
+                        path={miniFlamePath}
+                        color={flavor.isNight ? '#38BDF8' : '#FF7A18'}
+                        opacity={0.45}
+                      >
+                        <BlurMask blur={6} style="normal" />
+                      </Path>
                       <Path path={miniFlamePath}>
                         <LinearGradient
                           start={vec(40, 14)}
                           end={vec(40, 58)}
-                          colors={[
-                            flavor.isNight ? '#E0F2FE' : '#FFFBE6',
-                            flavor.color,
-                          ]}
+                          colors={
+                            flavor.isNight
+                              ? ['#E0F2FE', '#7CC6FE', '#0284C7']
+                              : ['#FFFBE6', '#FFB703', flavor.color]
+                          }
                         />
                       </Path>
                     </>
