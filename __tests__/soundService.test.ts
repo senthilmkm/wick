@@ -42,11 +42,30 @@ describe('soundService', () => {
       playsInSilentModeIOS: false,
       allowsRecordingIOS: false,
     });
-    statusCb!({ isLoaded: false });
+    statusCb!({ isLoaded: true, didJustFinish: false });
     expect(mockUnload).not.toHaveBeenCalled();
+    statusCb!({ isLoaded: false });
+    expect(mockUnload).toHaveBeenCalledTimes(1);
     mockUnload.mockRejectedValueOnce(new Error('unload err'));
     statusCb!({ isLoaded: true, didJustFinish: true });
-    expect(mockUnload).toHaveBeenCalledTimes(1);
+    expect(mockUnload).toHaveBeenCalledTimes(2);
+  });
+
+  it('preserves recording session and speaker routing when liveBreezeEnabled is active', async () => {
+    const mockUnload = jest.fn().mockResolvedValue(undefined);
+    mockSetAudioMode.mockResolvedValue(undefined);
+    mockCreateAsync.mockResolvedValueOnce({
+      sound: {
+        setOnPlaybackStatusUpdate: jest.fn(),
+        unloadAsync: mockUnload,
+      },
+    });
+
+    expect(await playMatchStrikeSound(true, true)).toBe(true);
+    expect(mockSetAudioMode).toHaveBeenCalledWith({
+      playsInSilentModeIOS: true,
+      allowsRecordingIOS: true,
+    });
   });
 
   it('handles audio errors gracefully', async () => {

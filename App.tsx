@@ -1092,7 +1092,7 @@ function WickRoot() {
           tiltAngle={tiltAngle}
           onStrikeLighter={() => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-            void playMatchStrikeSound(settings.soundEffectsEnabled);
+            void playMatchStrikeSound(settings.soundEffectsEnabled, settings.liveBreezeEnabled);
             setSnapshot((prev) => {
               const next = igniteWithLighter(prev, Date.now());
               storageService.saveSnapshot(next, Date.now());
