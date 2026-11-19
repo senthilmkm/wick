@@ -2,6 +2,7 @@ import Healthkit, {
   HKQuantityTypeIdentifier,
   HKStatisticsOptions,
 } from '@kingstinct/react-native-healthkit';
+import { Pedometer } from 'expo-sensors';
 
 /**
  * Requests HealthKit step-count read access (if not already granted)
@@ -48,6 +49,31 @@ export function subscribeToHealthKitSteps(onChange: () => void): () => void {
         (sub as { remove: () => void }).remove();
       }
     };
+  } catch {
+    return () => {};
+  }
+}
+
+/**
+ * Streams live foreground step-by-step updates from CoreMotion (CMPedometer)
+ * so the candle & step counter update immediately while walking.
+ */
+export async function subscribeToLivePedometer(
+  onStepDelta: (sessionSteps: number) => void
+): Promise<() => void> {
+  try {
+    const available = await Pedometer.isAvailableAsync();
+    if (!available) {
+      return () => {};
+    }
+    const { granted } = await Pedometer.requestPermissionsAsync();
+    if (!granted) {
+      return () => {};
+    }
+    const sub = Pedometer.watchStepCount((result) => {
+      onStepDelta(Math.max(0, Math.round(result.steps)));
+    });
+    return () => sub.remove();
   } catch {
     return () => {};
   }

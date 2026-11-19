@@ -49,6 +49,7 @@ import { buildWaxLedgerPdfHtml } from './src/services/exportService';
 import {
   fetchTodayHealthKitSteps,
   subscribeToHealthKitSteps,
+  subscribeToLivePedometer,
 } from './src/services/nativeHealthKit';
 import {
   notifySmokingGraceIfNeeded,
@@ -180,6 +181,8 @@ function WickRoot() {
   });
   const [activeRescue, setActiveRescue] = useState<ActiveSparkRescue | null>(null);
   const rescueBaselineStepsRef = useRef<number | null>(null);
+  const hkBaselineStepsRef = useRef<number>(0);
+  const pedometerSessionOffsetRef = useRef<number>(0);
   const [entitlement, setEntitlement] = useState<EntitlementState>(() => ({
     isPro: kvGet(KEY_PRO_CACHE) === '1',
     isEligibleForIntroTrial: true,
@@ -207,44 +210,53 @@ function WickRoot() {
     toastTimerRef.current = setTimeout(() => setStatusMessage(null), 3200);
   }, []);
 
+  const applyStepTotal = useCallback(
+    (steps: number) => {
+      setSnapshot((prev) => {
+        const res = evaluateCandleState({
+          snapshot: prev,
+          stepsToday: steps,
+          settings,
+          now: new Date(),
+        });
+        void notifySmokingGraceIfNeeded(prev.state, res.snapshot.state);
+        if (res.completedDayLayer) {
+          const nextLayers = storageService.appendWaxLayer(res.completedDayLayer);
+          setWaxLayers(nextLayers);
+        }
+        storageService.saveSnapshot(res.snapshot, Date.now());
+        return res.snapshot;
+      });
+
+      // Advance active 500-step Spark Rescue if user is rescuing a friend
+      setActiveRescue((prevRescue) => {
+        if (!prevRescue || prevRescue.completed) {
+          return prevRescue;
+        }
+        if (rescueBaselineStepsRef.current === null) {
+          rescueBaselineStepsRef.current = steps;
+        }
+        const walked = Math.max(0, steps - rescueBaselineStepsRef.current);
+        const updated = updateSparkRescueProgress(prevRescue, walked, Date.now());
+        if (updated.completed && !prevRescue.completed) {
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          showToast(`500 steps done! ${updated.senderName}'s wick is reignited!`);
+        }
+        return updated;
+      });
+    },
+    [settings, showToast]
+  );
+
   const syncHealthKit = useCallback(async () => {
     const steps = await fetchTodayHealthKitSteps();
     if (steps === null) {
       return;
     }
-    setSnapshot((prev) => {
-      const res = evaluateCandleState({
-        snapshot: prev,
-        stepsToday: steps,
-        settings,
-        now: new Date(),
-      });
-      void notifySmokingGraceIfNeeded(prev.state, res.snapshot.state);
-      if (res.completedDayLayer) {
-        const nextLayers = storageService.appendWaxLayer(res.completedDayLayer);
-        setWaxLayers(nextLayers);
-      }
-      storageService.saveSnapshot(res.snapshot, Date.now());
-      return res.snapshot;
-    });
-
-    // Advance active 500-step Spark Rescue if user is rescuing a friend
-    setActiveRescue((prevRescue) => {
-      if (!prevRescue || prevRescue.completed) {
-        return prevRescue;
-      }
-      if (rescueBaselineStepsRef.current === null) {
-        rescueBaselineStepsRef.current = steps;
-      }
-      const walked = Math.max(0, steps - rescueBaselineStepsRef.current);
-      const updated = updateSparkRescueProgress(prevRescue, walked, Date.now());
-      if (updated.completed && !prevRescue.completed) {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        showToast(`500 steps done! ${updated.senderName}'s wick is reignited!`);
-      }
-      return updated;
-    });
-  }, [settings, showToast]);
+    hkBaselineStepsRef.current = steps;
+    pedometerSessionOffsetRef.current = 0;
+    applyStepTotal(steps);
+  }, [applyStepTotal]);
 
   // Initialize Keychain anti-abuse state, weekly quota, and StoreKit/RevenueCat on mount
   useEffect(() => {
@@ -336,7 +348,7 @@ function WickRoot() {
     return () => sub.remove();
   }, [showToast, snapshot.stepsToday]);
 
-  // Sync HealthKit immediately when onboarded, on foreground resume, and on HK sample changes
+  // Sync HealthKit & live CoreMotion pedometer while foregrounded
   useEffect(() => {
     if (!onboarded) {
       return;
@@ -345,6 +357,24 @@ function WickRoot() {
     const unsubHk = subscribeToHealthKitSteps(() => {
       void syncHealthKit();
     });
+    let unsubPedometer: (() => void) | null = null;
+    let active = true;
+    void subscribeToLivePedometer((sessionSteps) => {
+      if (!active) {
+        return;
+      }
+      const delta = Math.max(0, sessionSteps - pedometerSessionOffsetRef.current);
+      pedometerSessionOffsetRef.current = sessionSteps;
+      hkBaselineStepsRef.current += delta;
+      applyStepTotal(hkBaselineStepsRef.current);
+    }).then((unsub) => {
+      if (active) {
+        unsubPedometer = unsub;
+      } else {
+        unsub();
+      }
+    });
+
     const appSub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         setResumeTick((t) => t + 1);
@@ -356,11 +386,15 @@ function WickRoot() {
     }, 15000);
 
     return () => {
+      active = false;
       unsubHk();
+      if (unsubPedometer) {
+        unsubPedometer();
+      }
       appSub.remove();
       clearInterval(poll);
     };
-  }, [onboarded, syncHealthKit]);
+  }, [onboarded, syncHealthKit, applyStepTotal]);
 
   const scheduleAutoHide = useCallback(() => {
     if (hideTimerRef.current) {
