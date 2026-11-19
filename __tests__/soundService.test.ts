@@ -1,6 +1,8 @@
 const mockSetAudioMode = jest.fn();
 const mockCreateAsync = jest.fn();
 
+jest.mock('../assets/match-strike.wav', () => 1, { virtual: true });
+
 jest.mock('expo-av', () => ({
   Audio: {
     setAudioModeAsync: (...args: unknown[]) => mockSetAudioMode(...args),
