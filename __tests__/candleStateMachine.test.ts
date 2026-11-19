@@ -36,11 +36,16 @@ describe('candleStateMachine & regression lifecycle', () => {
     expect(ignited.snapshot.state).toBe('IGNITING');
     expect(ignited.snapshot.ignitedAt).toBe(t0.getTime());
 
-    // Manual lighter strike ignites UNLIT_MORNING immediately, no-op if already lit
+    // Manual lighter strike ignites UNLIT_MORNING and NIGHT_SLEEP, no-op if already lit
     const lighterLit = igniteWithLighter(morning, t0.getTime());
     expect(lighterLit.state).toBe('IGNITING');
     expect(lighterLit.ignitedAt).toBe(t0.getTime());
     expect(igniteWithLighter(lighterLit, t0.getTime() + 500)).toBe(lighterLit);
+    const wakeFromNight = igniteWithLighter(
+      { ...lighterLit, state: 'NIGHT_SLEEP' },
+      t0.getTime() + 1000
+    );
+    expect(wakeFromNight.state).toBe('IGNITING');
 
     // High steps on ignition go straight to BLAZING
     const blazingIgnite = evaluateCandleState({

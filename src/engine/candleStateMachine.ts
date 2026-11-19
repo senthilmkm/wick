@@ -278,11 +278,11 @@ export function evaluateCandleState(input: StepEvaluationInput): StepEvaluationR
 }
 
 /**
- * Ignites an unlit morning candle immediately when the user strikes the on-screen
- * pocket lighter button (zero-friction manual ignition alongside automatic 5-step ignition).
+ * Ignites an unlit morning (or sleeping) candle immediately when the user strikes
+ * the pocket lighter button (zero-friction manual ignition alongside 5-step auto-ignition).
  */
 export function igniteWithLighter(snapshot: CandleSnapshot, nowMs: number): CandleSnapshot {
-  if (snapshot.state !== 'UNLIT_MORNING') {
+  if (snapshot.state !== 'UNLIT_MORNING' && snapshot.state !== 'NIGHT_SLEEP') {
     return snapshot;
   }
   return {

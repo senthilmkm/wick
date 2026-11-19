@@ -56,7 +56,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
       {/* Top Minimal Corner Actions */}
       <View style={styles.topRow}>
         <Text style={[styles.streakBadge, { color: theme.primaryText }]}>
-          Day {snapshot.streakDays}
+          Day {snapshot.streakDays} • {snapshot.stepsToday.toLocaleString('en-US')} steps
         </Text>
         <View style={styles.topRightActions}>
           {needsSpark && (
@@ -94,8 +94,8 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
         />
       </Pressable>
 
-      {/* Realistic Metallic Pocket Lighter Button (shown only when unlit) */}
-      {snapshot.state === 'UNLIT_MORNING' && (
+      {/* Realistic Metallic Pocket Lighter Button (shown when unlit or sleeping) */}
+      {(snapshot.state === 'UNLIT_MORNING' || snapshot.state === 'NIGHT_SLEEP') && (
         <View style={styles.lighterContainer}>
           <Pressable
             style={({ pressed }) => [
