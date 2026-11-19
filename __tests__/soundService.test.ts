@@ -26,7 +26,7 @@ describe('soundService', () => {
 
   it('plays match-strike respecting Silent switch and unloads on finish', async () => {
     const mockUnload = jest.fn().mockResolvedValue(undefined);
-    let statusCb: ((s: { isLoaded: boolean; didJustFinish?: boolean }) => void) | null = null;
+    let statusCb: ((s: { isLoaded: boolean; didJustFinish?: boolean; error?: string }) => void) | null = null;
     mockSetAudioMode.mockResolvedValue(undefined);
     mockCreateAsync.mockResolvedValueOnce({
       sound: {
@@ -45,6 +45,8 @@ describe('soundService', () => {
     statusCb!({ isLoaded: true, didJustFinish: false });
     expect(mockUnload).not.toHaveBeenCalled();
     statusCb!({ isLoaded: false });
+    expect(mockUnload).not.toHaveBeenCalled();
+    statusCb!({ isLoaded: false, error: 'playback error' });
     expect(mockUnload).toHaveBeenCalledTimes(1);
     mockUnload.mockRejectedValueOnce(new Error('unload err'));
     statusCb!({ isLoaded: true, didJustFinish: true });

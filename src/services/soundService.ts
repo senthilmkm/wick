@@ -22,10 +22,10 @@ export async function playMatchStrikeSound(
     );
     const { sound } = await Audio.Sound.createAsync(MATCH_STRIKE_ASSET, {
       shouldPlay: true,
-      volume: 0.75,
+      volume: 1.0,
     });
     sound.setOnPlaybackStatusUpdate((status) => {
-      if (!status.isLoaded || status.didJustFinish) {
+      if ((status.isLoaded && status.didJustFinish) || (!status.isLoaded && status.error)) {
         void sound.unloadAsync().catch(() => {});
       }
     });

@@ -675,7 +675,11 @@ function WickRoot() {
       },
     });
 
-    (async () => {
+    let startDelayTimer: ReturnType<typeof setTimeout> | null = null;
+    const startMic = async () => {
+      if (cancelled) {
+        return;
+      }
       const ok = await detector.startBlowModal();
       if (!ok || cancelled) {
         return;
@@ -724,10 +728,21 @@ function WickRoot() {
       } catch {
         await detector.stopBlowModal();
       }
-    })();
+    };
+
+    if (snapshot.state === 'IGNITING') {
+      startDelayTimer = setTimeout(() => {
+        void startMic();
+      }, 500);
+    } else {
+      void startMic();
+    }
 
     return () => {
       cancelled = true;
+      if (startDelayTimer) {
+        clearTimeout(startDelayTimer);
+      }
       setWindIntensity(0);
       void detector.stopBlowModal();
     };
