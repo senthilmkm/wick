@@ -35,7 +35,7 @@ const config: ExpoConfig = {
         'Wick uses step motion to light your candle on your first step and animate the flame in real time.',
       NSMicrophoneUsageDescription:
         'Wick listens for a gentle blow into the microphone when you choose to blow out your candle at bedtime.',
-      UIBackgroundModes: ['fetch', 'remote-notification', 'processing'],
+      UIBackgroundModes: ['fetch', 'remote-notification'],
     },
     privacyManifests: {
       NSPrivacyAccessedAPITypes: [
