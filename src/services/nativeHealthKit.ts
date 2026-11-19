@@ -4,18 +4,34 @@ import Healthkit, {
 } from '@kingstinct/react-native-healthkit';
 import { Pedometer } from 'expo-sensors';
 
+let cachedAvailable: boolean | null = null;
+let authRequested = false;
+
 /**
- * Requests HealthKit step-count read access (if not already granted)
- * and returns today's deduplicated Apple Watch + iPhone step total.
+ * Resets cached HealthKit availability/authorization flags (used in tests).
+ */
+export function resetHealthKitSessionCache(): void {
+  cachedAvailable = null;
+  authRequested = false;
+}
+
+/**
+ * Requests HealthKit step-count read access once per session (industry standard)
+ * and immediately queries today's deduplicated Apple Watch + iPhone step total.
  */
 export async function fetchTodayHealthKitSteps(): Promise<number | null> {
   try {
-    const available = await Healthkit.isHealthDataAvailable();
-    if (!available) {
+    if (cachedAvailable === null) {
+      cachedAvailable = await Healthkit.isHealthDataAvailable();
+    }
+    if (!cachedAvailable) {
       return null;
     }
 
-    await Healthkit.requestAuthorization([HKQuantityTypeIdentifier.stepCount]);
+    if (!authRequested) {
+      await Healthkit.requestAuthorization([HKQuantityTypeIdentifier.stepCount]);
+      authRequested = true;
+    }
 
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);

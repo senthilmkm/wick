@@ -32,6 +32,7 @@ jest.mock('expo-sensors', () => ({
 
 import {
   fetchTodayHealthKitSteps,
+  resetHealthKitSessionCache,
   subscribeToHealthKitSteps,
   subscribeToLivePedometer,
 } from '../src/services/nativeHealthKit';
@@ -39,6 +40,7 @@ import {
 describe('nativeHealthKit', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    resetHealthKitSessionCache();
   });
 
   it('returns null when HealthKit is unavailable or throws', async () => {
@@ -49,14 +51,17 @@ describe('nativeHealthKit', () => {
     expect(await fetchTodayHealthKitSteps()).toBeNull();
   });
 
-  it('requests authorization and returns rounded cumulative steps', async () => {
+  it('requests authorization once per session and returns rounded cumulative steps', async () => {
     mockIsHealthDataAvailable.mockResolvedValue(true);
     mockRequestAuthorization.mockResolvedValue(true);
     mockQueryStatisticsForQuantity.mockResolvedValueOnce({ sumQuantity: { quantity: 7432.6 } });
     expect(await fetchTodayHealthKitSteps()).toBe(7433);
 
+    // Second call skips isHealthDataAvailable & requestAuthorization
     mockQueryStatisticsForQuantity.mockResolvedValueOnce({});
     expect(await fetchTodayHealthKitSteps()).toBe(0);
+    expect(mockIsHealthDataAvailable).toHaveBeenCalledTimes(1);
+    expect(mockRequestAuthorization).toHaveBeenCalledTimes(1);
   });
 
   it('subscribes and cleans up both function and object subscriptions safely', () => {
