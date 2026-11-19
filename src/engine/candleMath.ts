@@ -224,3 +224,24 @@ export function formatTimeLeftLabel(
   }
   return `${hours}h ${mins}m left today`;
 }
+
+/**
+ * Returns true when `now` is within the user's nighttime window
+ * (from 30 minutes before sleepHour:sleepMinute up to wakeHour:wakeMinute).
+ */
+export function isNighttimeWindow(
+  now: Date,
+  wakeHour: number,
+  wakeMinute: number,
+  sleepHour: number,
+  sleepMinute: number
+): boolean {
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const wakeTotal = wakeHour * 60 + wakeMinute;
+  const bedStart = (sleepHour * 60 + sleepMinute - 30 + 1440) % 1440;
+
+  if (bedStart > wakeTotal) {
+    return nowMin >= bedStart || nowMin < wakeTotal;
+  }
+  return nowMin >= bedStart && nowMin < wakeTotal;
+}

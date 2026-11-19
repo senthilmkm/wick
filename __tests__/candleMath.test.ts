@@ -9,6 +9,7 @@ import {
   getFlameColorHex,
   getLocalDateKey,
   getLocalWeekKey,
+  isNighttimeWindow,
   smoothStep,
 } from '../src/engine/candleMath';
 import { CandleState } from '../src/types/wick';
@@ -124,5 +125,16 @@ describe('candleMath', () => {
     const goalMetPace = computePaceRatio(3000, 500, 3000);
     expect(goalMetPace).toBe(1.2);
     expect(computeFlameIntensity('BLAZING', goalMetPace)).toBeCloseTo(0.85, 4);
+  });
+
+  it('detects nighttime window accurately for standard and post-midnight sleep schedules', () => {
+    // Standard 07:00 wake -> 23:00 sleep (bedStart = 22:30)
+    expect(isNighttimeWindow(new Date(2026, 10, 19, 14, 0), 7, 0, 23, 0)).toBe(false);
+    expect(isNighttimeWindow(new Date(2026, 10, 19, 22, 45), 7, 0, 23, 0)).toBe(true);
+    expect(isNighttimeWindow(new Date(2026, 10, 19, 3, 30), 7, 0, 23, 0)).toBe(true);
+
+    // Post-midnight 07:00 wake -> 01:00 sleep (bedStart = 00:30)
+    expect(isNighttimeWindow(new Date(2026, 10, 19, 22, 45), 7, 0, 1, 0)).toBe(false);
+    expect(isNighttimeWindow(new Date(2026, 10, 19, 1, 15), 7, 0, 1, 0)).toBe(true);
   });
 });

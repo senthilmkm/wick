@@ -6,6 +6,7 @@ import {
   RESUSCITATION_STEPS_REQUIRED,
   SMOKING_GRACE_DURATION_MS,
 } from '../src/engine/candleStateMachine';
+import { isNighttimeWindow } from '../src/engine/candleMath';
 import {
   buildSparkUniversalLink,
   createSparkToken,
@@ -125,5 +126,10 @@ describe('Wick enhancements & bug-fix regression suite', () => {
     expect(canUseGlassDome(ent, day4Ms)).toBe(false);
     expect(canAddFriend(ent, 1, day4Ms)).toBe(false);
     expect(canExportPdf(ent, day4Ms)).toBe(false);
+  });
+
+  it('prevents daytime blow-out outside configured sleep window', () => {
+    expect(isNighttimeWindow(new Date(2026, 10, 19, 11, 30), 7, 0, 23, 0)).toBe(false);
+    expect(isNighttimeWindow(new Date(2026, 10, 19, 23, 15), 7, 0, 23, 0)).toBe(true);
   });
 });

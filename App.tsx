@@ -10,7 +10,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { MMKV } from 'react-native-mmkv';
 import { PaywallModal, PaywallReason } from './src/components/PaywallModal';
 import { getThemeById } from './src/constants/themes';
-import { getLocalDateKey, getLocalWeekKey } from './src/engine/candleMath';
+import { getLocalDateKey, getLocalWeekKey, isNighttimeWindow } from './src/engine/candleMath';
 import {
   activateGlassDome,
   createMorningSnapshot,
@@ -584,7 +584,18 @@ function WickRoot() {
             return;
           }
           setWindIntensity(computeWindShakeIntensity(st.metering));
-          if (settings.micBlowOutEnabled && detector.processMeteringSample(st.metering)) {
+          const inNightWindow = isNighttimeWindow(
+            new Date(),
+            settings.wakeHour,
+            settings.wakeMinute,
+            settings.sleepHour,
+            settings.sleepMinute
+          );
+          if (
+            inNightWindow &&
+            settings.micBlowOutEnabled &&
+            detector.processMeteringSample(st.metering)
+          ) {
             void detector.stopBlowModal().then(() => {
               setWindIntensity(0);
               void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -614,6 +625,10 @@ function WickRoot() {
     activeTab,
     settings.liveBreezeEnabled,
     settings.micBlowOutEnabled,
+    settings.wakeHour,
+    settings.wakeMinute,
+    settings.sleepHour,
+    settings.sleepMinute,
     snapshot.flameIntensity > 0,
     snapshot.state,
     showToast,
