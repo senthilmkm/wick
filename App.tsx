@@ -75,6 +75,7 @@ export default function App() {
   const [tabsVisible, setTabsVisible] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [paywallReason, setPaywallReason] = useState<PaywallReason | null>(null);
+  const [resumeTick, setResumeTick] = useState(0);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -168,6 +169,7 @@ export default function App() {
     });
     const appSub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
+        setResumeTick((t) => t + 1);
         void syncHealthKit();
       }
     });
@@ -331,6 +333,7 @@ export default function App() {
           snapshot={snapshot}
           theme={theme}
           waxLayers={waxLayers}
+          resumeTick={resumeTick}
           onStrikeLighter={() => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             setSnapshot((prev) => {

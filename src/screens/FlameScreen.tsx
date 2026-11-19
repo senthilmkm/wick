@@ -7,6 +7,7 @@ interface FlameScreenProps {
   snapshot: CandleSnapshot;
   theme: WickTheme;
   waxLayers: WaxLayer[];
+  resumeTick?: number;
   statusMessage?: string | null;
   onStrikeLighter: () => void;
   onShareVideo: () => void;
@@ -20,6 +21,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
   snapshot,
   theme,
   waxLayers,
+  resumeTick,
   statusMessage,
   onStrikeLighter,
   onShareVideo,
@@ -67,7 +69,12 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
         onPress={handleTapCandle}
         onLongPress={() => setShowActionsSheet(true)}
       >
-        <Candle3DCanvas snapshot={snapshot} theme={theme} waxLayers={waxLayers} />
+        <Candle3DCanvas
+          snapshot={snapshot}
+          theme={theme}
+          waxLayers={waxLayers}
+          resumeTick={resumeTick}
+        />
       </Pressable>
 
       {/* Pocket Lighter Button (shown only when unlit for zero-friction ignition) */}
