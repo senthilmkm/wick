@@ -5,7 +5,21 @@ export interface AudioSessionDriver {
 }
 
 export const BLOW_DECIBEL_THRESHOLD = -12; // dBFS sustained wind burst
+export const BREEZE_MIN_DECIBEL = -28; // dBFS gentle breath/air flow
 export const BLOW_REQUIRED_CONSECUTIVE_FRAMES = 3;
+
+/**
+ * Maps a microphone dBFS sample to a normalized [0, 1] breeze shake intensity.
+ */
+export function computeWindShakeIntensity(meteringDb: number): number {
+  if (Number.isNaN(meteringDb) || meteringDb <= BREEZE_MIN_DECIBEL) {
+    return 0;
+  }
+  if (meteringDb >= BLOW_DECIBEL_THRESHOLD) {
+    return 1;
+  }
+  return (meteringDb - BREEZE_MIN_DECIBEL) / (BLOW_DECIBEL_THRESHOLD - BREEZE_MIN_DECIBEL);
+}
 
 export class AudioBlowDetector {
   private consecutiveHits = 0;

@@ -38,7 +38,7 @@ import { FlameScreen } from './src/screens/FlameScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { SanctuaryScreen } from './src/screens/SanctuaryScreen';
 import { WaxLedgerScreen } from './src/screens/WaxLedgerScreen';
-import { AudioBlowDetector } from './src/services/audioBlowService';
+import { AudioBlowDetector, computeWindShakeIntensity } from './src/services/audioBlowService';
 import {
   checkProEntitlement,
   initBilling,
@@ -167,6 +167,7 @@ function WickRoot() {
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [paywallReason, setPaywallReason] = useState<PaywallReason | null>(null);
   const [resumeTick, setResumeTick] = useState(0);
+  const [windIntensity, setWindIntensity] = useState(0);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -439,6 +440,99 @@ function WickRoot() {
     };
   }, [onboarded, syncHealthKit, applyStepTotal]);
 
+  // Live breeze-shake on blow when Flame screen is open and enabled in Sanctuary
+  useEffect(() => {
+    if (
+      !hydrated ||
+      !onboarded ||
+      activeTab !== 'flame' ||
+      !settings.liveBreezeEnabled ||
+      snapshot.flameIntensity <= 0
+    ) {
+      setWindIntensity(0);
+      return;
+    }
+
+    let cancelled = false;
+    let recording: Audio.Recording | null = null;
+    const detector = new AudioBlowDetector({
+      setAmbientMixMode: async () => {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: false,
+        }).catch(() => {});
+      },
+      activateMicSession: async () => {
+        const { granted } = await Audio.requestPermissionsAsync();
+        if (!granted) {
+          return false;
+        }
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+        return true;
+      },
+      deactivateMicSession: async () => {
+        if (recording) {
+          await recording.stopAndUnloadAsync().catch(() => {});
+          recording = null;
+        }
+      },
+    });
+
+    (async () => {
+      const ok = await detector.startBlowModal();
+      if (!ok || cancelled) {
+        return;
+      }
+      try {
+        const rec = new Audio.Recording();
+        recording = rec;
+        await rec.prepareToRecordAsync({
+          ...Audio.RecordingOptionsPresets.LOW_QUALITY,
+          isMeteringEnabled: true,
+        });
+        rec.setProgressUpdateInterval(120);
+        rec.setOnRecordingStatusUpdate((st) => {
+          if (cancelled || typeof st.metering !== 'number') {
+            return;
+          }
+          setWindIntensity(computeWindShakeIntensity(st.metering));
+          if (settings.micBlowOutEnabled && detector.processMeteringSample(st.metering)) {
+            void detector.stopBlowModal().then(() => {
+              setWindIntensity(0);
+              void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              setSnapshot((prev) => {
+                const next = triggerNightBlowOut(prev, Date.now());
+                storageService.saveSnapshot(next, Date.now());
+                return next;
+              });
+              showToast('Goodnight. Wax is cooling.');
+            });
+          }
+        });
+        await rec.startAsync();
+      } catch {
+        await detector.stopBlowModal();
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      setWindIntensity(0);
+      void detector.stopBlowModal();
+    };
+  }, [
+    hydrated,
+    onboarded,
+    activeTab,
+    settings.liveBreezeEnabled,
+    settings.micBlowOutEnabled,
+    snapshot.flameIntensity > 0,
+    showToast,
+  ]);
+
   const scheduleAutoHide = useCallback(() => {
     if (hideTimerRef.current) {
       clearTimeout(hideTimerRef.current);
@@ -673,6 +767,7 @@ function WickRoot() {
           theme={theme}
           waxLayers={waxLayers}
           resumeTick={resumeTick}
+          windIntensity={windIntensity}
           onStrikeLighter={() => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             setSnapshot((prev) => {

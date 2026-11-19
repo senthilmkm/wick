@@ -10,6 +10,7 @@ interface FlameScreenProps {
   theme: WickTheme;
   waxLayers: WaxLayer[];
   resumeTick?: number;
+  windIntensity?: number;
   statusMessage?: string | null;
   onStrikeLighter: () => void;
   onShareVideo: () => void;
@@ -24,6 +25,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
   theme,
   waxLayers,
   resumeTick,
+  windIntensity = 0,
   statusMessage,
   onStrikeLighter,
   onShareVideo,
@@ -86,6 +88,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
           theme={theme}
           waxLayers={waxLayers}
           resumeTick={resumeTick}
+          windIntensity={windIntensity}
         />
       </Pressable>
 

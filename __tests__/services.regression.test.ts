@@ -1,6 +1,11 @@
 import { getThemeById, THEME_LIST } from '../src/constants/themes';
 import { createMorningSnapshot } from '../src/engine/candleStateMachine';
-import { AudioBlowDetector, BLOW_DECIBEL_THRESHOLD } from '../src/services/audioBlowService';
+import {
+  AudioBlowDetector,
+  BLOW_DECIBEL_THRESHOLD,
+  BREEZE_MIN_DECIBEL,
+  computeWindShakeIntensity,
+} from '../src/services/audioBlowService';
 import { CloudKitCircleService } from '../src/services/cloudKitService';
 import { buildWaxLedgerPdfHtml, ExportService } from '../src/services/exportService';
 import { MotionCoordinator } from '../src/services/motionService';
@@ -227,6 +232,12 @@ describe('themes, storage, motion, audio, export & CloudKit regression tests', (
     expect(detector.processMeteringSample(-6)).toBe(true); // 3 consecutive hits
     await detector.stopBlowModal();
     expect(micActive).toBe(false);
+
+    // Wind shake intensity mapping
+    expect(computeWindShakeIntensity(Number.NaN)).toBe(0);
+    expect(computeWindShakeIntensity(BREEZE_MIN_DECIBEL - 5)).toBe(0);
+    expect(computeWindShakeIntensity(BLOW_DECIBEL_THRESHOLD + 2)).toBe(1);
+    expect(computeWindShakeIntensity(-20)).toBeCloseTo(0.5, 4);
   });
 
   it('exports escaped HTML-to-PDF Wax Ledger and 3-sec MP4 Share Sheet', async () => {

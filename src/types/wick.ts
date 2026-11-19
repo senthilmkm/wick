@@ -37,6 +37,7 @@ export interface UserSettings {
   sleepMinute: number; // 0-59
   themeId: ThemeId;
   micBlowOutEnabled: boolean;
+  liveBreezeEnabled: boolean;
   sleepFocusSyncEnabled: boolean;
   soundEffectsEnabled: boolean;
 }

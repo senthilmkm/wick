@@ -143,6 +143,16 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
 
         <View style={styles.row}>
           <Text style={[styles.rowLabel, { color: theme.primaryText }]}>
+            Live Breeze Shake (Mic)
+          </Text>
+          <Switch
+            value={settings.liveBreezeEnabled}
+            onValueChange={(val) => onUpdateSettings({ liveBreezeEnabled: val })}
+          />
+        </View>
+
+        <View style={styles.row}>
+          <Text style={[styles.rowLabel, { color: theme.primaryText }]}>
             Mic Blow-Out at Bedtime
           </Text>
           <Switch

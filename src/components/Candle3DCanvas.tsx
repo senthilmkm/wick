@@ -30,6 +30,7 @@ interface Candle3DCanvasProps {
   theme: WickTheme;
   waxLayers: WaxLayer[];
   resumeTick?: number;
+  windIntensity?: number;
 }
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -74,12 +75,18 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
   theme,
   waxLayers,
   resumeTick = 0,
+  windIntensity = 0,
 }) => {
   const breath = useSharedValue(1);
   const sway = useSharedValue(0);
+  const windTilt = useSharedValue(0);
   const bloom = useSharedValue(1);
   const sparkProgress = useSharedValue(0);
   const smokeDrift = useSharedValue(0);
+
+  useEffect(() => {
+    windTilt.value = withSpring(windIntensity, { damping: 10, stiffness: 220 });
+  }, [windIntensity, windTilt]);
 
   useEffect(() => {
     const anxious = snapshot.state === 'FLICKERING' || snapshot.state === 'DYING_EMBER';
@@ -209,9 +216,9 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
   const flameTransform = useDerivedValue(() => [
     { translateX: CX },
     { translateY: flameBaseY },
-    { rotate: sway.value },
-    { scaleX: (1 + (1 - breath.value) * 0.25) * bloom.value },
-    { scaleY: breath.value * bloom.value },
+    { rotate: sway.value + windTilt.value * 0.38 },
+    { scaleX: (1 + (1 - breath.value) * 0.25 + windTilt.value * 0.2) * bloom.value },
+    { scaleY: Math.max(0.45, breath.value * bloom.value * (1 - windTilt.value * 0.35)) },
     { translateX: -CX },
     { translateY: -flameBaseY },
   ]);
