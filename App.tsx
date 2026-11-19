@@ -96,6 +96,10 @@ const kvSet = (key: string, val: string): void => {
 const KEY_ONBOARDED = 'wick.onboarded.v1';
 const KEY_PRO_CACHE = 'wick.pro_cached.v1';
 const KEY_FRIENDS = 'wick.friends.v1';
+const SECURE_ONBOARDED = 'wick_onboarded_v1';
+const SECURE_SETTINGS = 'wick_settings_v1';
+const SECURE_SNAPSHOT = 'wick_snapshot_v1';
+const SECURE_PRO = 'wick_pro_v1';
 const REVENUECAT_IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY;
 
 const storageService = new LocalStorageService(
@@ -156,6 +160,7 @@ export default function App() {
 }
 
 function WickRoot() {
+  const [hydrated, setHydrated] = useState<boolean>(() => mmkvInstance !== null);
   const [onboarded, setOnboarded] = useState<boolean>(() => kvGet(KEY_ONBOARDED) === '1');
   const [activeTab, setActiveTab] = useState<TabKey>('flame');
   const [tabsVisible, setTabsVisible] = useState(true);
@@ -225,6 +230,7 @@ function WickRoot() {
           setWaxLayers(nextLayers);
         }
         storageService.saveSnapshot(res.snapshot, Date.now());
+        void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(res.snapshot)).catch(() => {});
         return res.snapshot;
       });
 
@@ -258,34 +264,71 @@ function WickRoot() {
     applyStepTotal(steps);
   }, [applyStepTotal]);
 
-  // Initialize Keychain anti-abuse state, weekly quota, and StoreKit/RevenueCat on mount
+  // Initialize Keychain anti-abuse state, durable onboarding/settings fallback, and billing on mount
   useEffect(() => {
     let mounted = true;
     initBilling(REVENUECAT_IOS_KEY);
     (async () => {
       const now = new Date();
       const weekKey = getLocalWeekKey(now);
-      const [firstInstall, domeClaimed, quota, remotePro] = await Promise.all([
+      const [
+        firstInstall,
+        domeClaimed,
+        quota,
+        remotePro,
+        secOnboarded,
+        secSettings,
+        secSnapshot,
+        secPro,
+      ] = await Promise.all([
         storageService.ensureFirstInstallRecorded(now.getTime()),
         storageService.isStarterDomeClaimed(),
         storageService.loadVideoExportQuota(weekKey),
         checkProEntitlement(REVENUECAT_IOS_KEY),
+        SecureStore.getItemAsync(SECURE_ONBOARDED).catch(() => null),
+        SecureStore.getItemAsync(SECURE_SETTINGS).catch(() => null),
+        SecureStore.getItemAsync(SECURE_SNAPSHOT).catch(() => null),
+        SecureStore.getItemAsync(SECURE_PRO).catch(() => null),
       ]);
       if (!mounted) {
         return;
       }
-      if (remotePro) {
+      if (secOnboarded === '1') {
+        kvSet(KEY_ONBOARDED, '1');
+        setOnboarded(true);
+      }
+      if (secSettings) {
+        try {
+          const parsed = { ...DEFAULT_SETTINGS, ...JSON.parse(secSettings) } as UserSettings;
+          setSettings(parsed);
+          storageService.saveSettings(parsed);
+        } catch {
+          // ignore corrupt fallback
+        }
+      }
+      if (secSnapshot) {
+        try {
+          const parsedSnap = JSON.parse(secSnapshot) as CandleSnapshot;
+          setSnapshot(parsedSnap);
+          storageService.saveSnapshot(parsedSnap, now.getTime());
+        } catch {
+          // ignore corrupt fallback
+        }
+      }
+      const isProUser = remotePro || secPro === '1';
+      if (isProUser) {
         kvSet(KEY_PRO_CACHE, '1');
       }
       setEntitlement((prev) => ({
         ...prev,
-        isPro: prev.isPro || remotePro,
+        isPro: prev.isPro || isProUser,
         firstInstallAt: firstInstall,
         starterDomeClaimed: domeClaimed,
         isEligibleForIntroTrial: canOfferFreeTrial(true, firstInstall === now.getTime() ? null : firstInstall, domeClaimed),
         freeVideoExportsThisWeek: quota.count,
         weekKey: quota.weekKey,
       }));
+      setHydrated(true);
     })();
     return () => {
       mounted = false;
@@ -421,6 +464,7 @@ function WickRoot() {
     setSettings((prev) => {
       const next = { ...prev, ...partial };
       storageService.saveSettings(next);
+      void SecureStore.setItemAsync(SECURE_SETTINGS, JSON.stringify(next)).catch(() => {});
       if (partial.wakeHour !== undefined || partial.wakeMinute !== undefined) {
         void scheduleMorningWakeNotification(next);
       }
@@ -581,6 +625,10 @@ function WickRoot() {
     }
   };
 
+  if (!hydrated) {
+    return <View style={[styles.flex, { backgroundColor: '#0A0A0C' }]} />;
+  }
+
   if (!onboarded) {
     return (
       <GestureHandlerRootView style={styles.flex}>
@@ -590,6 +638,7 @@ function WickRoot() {
           onComplete={(goal) => {
             handleUpdateSettings({ dailyStepGoal: goal });
             kvSet(KEY_ONBOARDED, '1');
+            void SecureStore.setItemAsync(SECURE_ONBOARDED, '1').catch(() => {});
             setOnboarded(true);
             void scheduleMorningWakeNotification({ ...settings, dailyStepGoal: goal });
             void syncHealthKit();
@@ -731,6 +780,7 @@ function WickRoot() {
           void purchaseProPackage(REVENUECAT_IOS_KEY).then(({ purchased }) => {
             if (purchased) {
               kvSet(KEY_PRO_CACHE, '1');
+              void SecureStore.setItemAsync(SECURE_PRO, '1').catch(() => {});
               setEntitlement((e) => ({ ...e, isPro: true, isEligibleForIntroTrial: false }));
               setPaywallReason(null);
               showToast('Welcome to Wick Pro!');
@@ -744,6 +794,7 @@ function WickRoot() {
             setPaywallReason(null);
             if (restored) {
               kvSet(KEY_PRO_CACHE, '1');
+              void SecureStore.setItemAsync(SECURE_PRO, '1').catch(() => {});
               setEntitlement((e) => ({ ...e, isPro: true, isEligibleForIntroTrial: false }));
               showToast('Wick Pro restored!');
             } else {
