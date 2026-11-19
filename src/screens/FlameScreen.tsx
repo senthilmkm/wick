@@ -115,7 +115,9 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
           </View>
           <Text style={styles.timeLeftSub}>
             {goalMet
-              ? `Goal reached! • ${timeLeftLabel}`
+              ? timeLeftLabel === 'Goal reached'
+                ? 'Goal reached!'
+                : `Goal reached! • ${timeLeftLabel}`
               : `${stepsRemaining.toLocaleString('en-US')} to go (~${walkMins}m walk) • ${timeLeftLabel}`}
           </Text>
         </View>
