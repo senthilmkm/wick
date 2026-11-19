@@ -48,11 +48,17 @@ import {
   purchaseProPackage,
   restoreProPurchases,
 } from './src/services/billingService';
+import { CloudKitCircleService } from './src/services/cloudKitService';
 import {
   enableLanternBrightness,
   restoreLanternBrightness,
 } from './src/services/lanternService';
 import { buildWaxLedgerPdfHtml } from './src/services/exportService';
+import {
+  createNativeCloudKitDriver,
+  reloadNativeWidgets,
+  writeNativeWidgetSnapshot,
+} from './src/services/nativeCloudBridge';
 import {
   fetchTodayHealthKitSteps,
   subscribeToHealthKitSteps,
@@ -123,10 +129,15 @@ const storageService = new LocalStorageService(
   {
     writeAppGroupSnapshot: (payload) => {
       kvSet('wick.widget.snapshot', payload);
+      writeNativeWidgetSnapshot(payload);
     },
-    reloadAllTimelines: () => {},
+    reloadAllTimelines: () => {
+      reloadNativeWidgets();
+    },
   }
 );
+
+const cloudKitService = new CloudKitCircleService(createNativeCloudKitDriver());
 
 class AppErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -243,6 +254,7 @@ function WickRoot() {
         }
         storageService.saveSnapshot(res.snapshot, Date.now());
         void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(res.snapshot)).catch(() => {});
+        void cloudKitService.syncOwnCandleIfNeeded('Friend', res.snapshot, Date.now()).catch(() => {});
         return res.snapshot;
       });
 
@@ -444,6 +456,15 @@ function WickRoot() {
       if (state === 'active') {
         setResumeTick((t) => t + 1);
         void syncHealthKit();
+        void cloudKitService
+          .refreshFriendCandles()
+          .then((remoteFriends) => {
+            if (remoteFriends.length > 0) {
+              setFriends(remoteFriends);
+              kvSet(KEY_FRIENDS, JSON.stringify(remoteFriends));
+            }
+          })
+          .catch(() => {});
       }
     });
     const poll = setInterval(() => {
@@ -773,9 +794,13 @@ function WickRoot() {
       setPaywallReason('friend');
       return;
     }
-    const pairUrl = `https://senthilmkm.github.io/wick/pair.html?id=${encodeURIComponent(
-      `usr_${Date.now()}`
-    )}&name=${encodeURIComponent('Friend')}&streak=${snapshot.streakDays}`;
+    const ckShareUrl = await cloudKitService.inviteFriendToLockScreen().catch(() => null);
+    const pairUrl =
+      ckShareUrl && ckShareUrl.length > 0
+        ? ckShareUrl
+        : `https://senthilmkm.github.io/wick/pair.html?id=${encodeURIComponent(
+            `usr_${Date.now()}`
+          )}&name=${encodeURIComponent('Friend')}&streak=${snapshot.streakDays}`;
     try {
       await Share.share({
         title: 'Pair our Wick Candles',

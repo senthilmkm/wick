@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@bacons/apple-targets": "^5.0.0",
     "@kingstinct/react-native-healthkit": "^8.1.0",
     "@shopify/react-native-skia": "^1.5.0",
     "expo": "~52.0.0",

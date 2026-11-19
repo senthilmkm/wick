@@ -53,6 +53,7 @@ const config: ExpoConfig = {
     },
   },
   plugins: [
+    '@bacons/apple-targets',
     'expo-secure-store',
     'expo-sqlite',
     'expo-notifications',
