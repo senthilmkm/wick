@@ -65,7 +65,7 @@ describe('nativeHealthKit', () => {
     expect(mockRequestAuthorization).toHaveBeenCalledTimes(1);
   });
 
-  it('subscribes and cleans up both function and object subscriptions safely', () => {
+  it('subscribes and cleans up both function and object subscriptions safely', async () => {
     const fnUnsub = jest.fn();
     mockSubscribeToChanges.mockImplementationOnce((_id, cb: () => void) => {
       cb();
@@ -77,11 +77,25 @@ describe('nativeHealthKit', () => {
     unsub1();
     expect(fnUnsub).toHaveBeenCalledTimes(1);
 
-    const objRemove = jest.fn();
+    const objRemove = jest.fn().mockRejectedValue(new Error('remove err'));
     mockSubscribeToChanges.mockReturnValueOnce({ remove: objRemove });
     const unsub2 = subscribeToHealthKitSteps(onChange);
     unsub2();
+    await Promise.resolve();
     expect(objRemove).toHaveBeenCalledTimes(1);
+
+    // Promise-wrapped unsubscribe (e.g. HealthKit v8 subscribeToChanges)
+    const asyncUnsub = jest.fn().mockRejectedValue(new Error('unsub err'));
+    mockSubscribeToChanges.mockReturnValueOnce(Promise.resolve(asyncUnsub));
+    const unsubAsync = subscribeToHealthKitSteps(onChange);
+    unsubAsync();
+    await Promise.resolve();
+    expect(asyncUnsub).toHaveBeenCalledTimes(1);
+
+    mockSubscribeToChanges.mockReturnValueOnce(Promise.reject(new Error('sub promise err')));
+    const unsubRej = subscribeToHealthKitSteps(onChange);
+    unsubRej();
+    await Promise.resolve();
 
     mockSubscribeToChanges.mockImplementationOnce(() => {
       throw new Error('sub error');

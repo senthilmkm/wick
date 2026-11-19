@@ -24,12 +24,17 @@ export function computeWindShakeIntensity(meteringDb: number): number {
 export class AudioBlowDetector {
   private consecutiveHits = 0;
   private isListening = false;
+  private sessionEpoch = 0;
 
   constructor(private readonly driver: AudioSessionDriver) {}
 
   async startBlowModal(): Promise<boolean> {
+    const startEpoch = ++this.sessionEpoch;
     const granted = await this.driver.activateMicSession();
-    if (!granted) {
+    if (!granted || startEpoch !== this.sessionEpoch) {
+      if (granted) {
+        await this.driver.deactivateMicSession();
+      }
       await this.driver.setAmbientMixMode();
       this.isListening = false;
       this.consecutiveHits = 0;
@@ -60,9 +65,13 @@ export class AudioBlowDetector {
   }
 
   async stopBlowModal(): Promise<void> {
+    this.sessionEpoch += 1;
     this.isListening = false;
     this.consecutiveHits = 0;
-    await this.driver.deactivateMicSession();
-    await this.driver.setAmbientMixMode();
+    try {
+      await this.driver.deactivateMicSession();
+    } finally {
+      await this.driver.setAmbientMixMode();
+    }
   }
 }

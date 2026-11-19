@@ -233,7 +233,7 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
                   )} steps • ${recap.daysLit}/7 days lit${
                     recap.topMood ? ` • Top mood: ${recap.topMood}` : ''
                   } — Keep your wick lit!`,
-                });
+                }).catch(() => {});
               }}
             >
               <Text style={styles.recapShareText}>Share Week</Text>

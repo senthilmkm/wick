@@ -94,7 +94,8 @@ export class LocalStorageService {
     // Debounce WidgetKit reloads to state-bucket transitions or >= 15 min intervals
     const lastState = this.kv.getString(KEY_LAST_WIDGET_STATE) as CandleState | undefined;
     const lastReloadRaw = this.kv.getString(KEY_LAST_WIDGET_RELOAD_AT);
-    const lastReloadAt = lastReloadRaw ? Number(lastReloadRaw) : 0;
+    const parsedLastReload = lastReloadRaw ? Number(lastReloadRaw) : 0;
+    const lastReloadAt = Number.isFinite(parsedLastReload) ? parsedLastReload : 0;
 
     const stateChanged = lastState !== snapshot.state;
     const intervalElapsed = nowMs - lastReloadAt >= WIDGET_RELOAD_DEBOUNCE_MS;

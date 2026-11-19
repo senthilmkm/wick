@@ -46,14 +46,20 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [, setMinuteTick] = useState(0);
   const lastStepsRef = useRef(snapshot.stepsToday);
+  const lastDateKeyRef = useRef(snapshot.dateKey);
   const lastStepActivityAtRef = useRef(snapshot.updatedAt || Date.now());
 
   useEffect(() => {
-    if (snapshot.stepsToday > lastStepsRef.current) {
+    if (
+      snapshot.dateKey !== lastDateKeyRef.current ||
+      snapshot.stepsToday < lastStepsRef.current ||
+      snapshot.stepsToday > lastStepsRef.current
+    ) {
       lastStepActivityAtRef.current = Date.now();
     }
+    lastDateKeyRef.current = snapshot.dateKey;
     lastStepsRef.current = snapshot.stepsToday;
-  }, [snapshot.stepsToday]);
+  }, [snapshot.stepsToday, snapshot.dateKey]);
 
   useEffect(() => {
     const timer = setInterval(() => setMinuteTick((t) => t + 1), 60000);
@@ -256,7 +262,12 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
 
       {/* Long-Press Quick Actions Modal */}
       {showActionsSheet && (
-        <View style={styles.quickSheet}>
+        <>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setShowActionsSheet(false)}
+          />
+          <View style={styles.quickSheet}>
           <Pressable
             style={styles.sheetBtn}
             onPress={() => {
@@ -294,6 +305,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
             <Text style={styles.sheetCancelText}>Cancel</Text>
           </Pressable>
         </View>
+        </>
       )}
       <InfoModal visible={showInfoModal} onClose={() => setShowInfoModal(false)} />
     </View>

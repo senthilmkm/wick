@@ -180,7 +180,6 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
       );
     } else {
       bloom.value = 1;
-      sparkProgress.value = 0;
     }
 
     if (snapshot.state === 'SMOKING_GRACE') {

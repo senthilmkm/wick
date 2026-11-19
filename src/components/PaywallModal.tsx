@@ -64,15 +64,15 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
           </View>
 
           <View style={styles.legalRow}>
-            <Pressable onPress={() => void Linking.openURL(PRIVACY_URL)}>
+            <Pressable onPress={() => void Linking.openURL(PRIVACY_URL).catch(() => {})}>
               <Text style={styles.legalText}>Privacy Policy</Text>
             </Pressable>
             <Text style={styles.legalDot}>•</Text>
-            <Pressable onPress={() => void Linking.openURL(TERMS_URL)}>
+            <Pressable onPress={() => void Linking.openURL(TERMS_URL).catch(() => {})}>
               <Text style={styles.legalText}>Terms of Use</Text>
             </Pressable>
             <Text style={styles.legalDot}>•</Text>
-            <Pressable onPress={() => void Linking.openURL(SUPPORT_URL)}>
+            <Pressable onPress={() => void Linking.openURL(SUPPORT_URL).catch(() => {})}>
               <Text style={styles.legalText}>Support</Text>
             </Pressable>
           </View>

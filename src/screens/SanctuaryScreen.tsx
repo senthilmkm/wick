@@ -284,7 +284,10 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
         <Text style={styles.version}>Wick v1.0.0 • Local-First</Text>
       </Pressable>
 
-      <Pressable style={styles.supportLink} onPress={() => void Linking.openURL(SUPPORT_URL)}>
+      <Pressable
+        style={styles.supportLink}
+        onPress={() => void Linking.openURL(SUPPORT_URL).catch(() => {})}
+      >
         <Text style={styles.supportText}>Support & Help</Text>
       </Pressable>
 

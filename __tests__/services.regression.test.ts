@@ -233,6 +233,32 @@ describe('themes, storage, motion, audio, export & CloudKit regression tests', (
     await detector.stopBlowModal();
     expect(micActive).toBe(false);
 
+    // Stopping while startBlowModal is awaiting activation aborts cleanly
+    let resolveMic!: (v: boolean) => void;
+    const racingDetector = new AudioBlowDetector({
+      setAmbientMixMode: async () => {
+        micActive = false;
+      },
+      activateMicSession: () =>
+        new Promise<boolean>((r) => {
+          resolveMic = r;
+        }),
+      deactivateMicSession: async () => {
+        micActive = false;
+      },
+    });
+    const pendingStart = racingDetector.startBlowModal();
+    await racingDetector.stopBlowModal();
+    resolveMic(true);
+    expect(await pendingStart).toBe(false);
+
+    // Non-numeric widget reload timestamp recovers without NaN poisoning
+    const { service: s2, kvMap: kv2 } = createMemoryStorage();
+    kv2.set('wick.widget.last_reload_at', 'corrupt');
+    const snap = createMorningSnapshot('2026-11-19', 1000, 0, 0, 1);
+    s2.saveSnapshot(snap, 2000);
+    expect(kv2.get('wick.widget.last_reload_at')).toBe('2000');
+
     // Wind shake intensity mapping
     expect(computeWindShakeIntensity(Number.NaN)).toBe(0);
     expect(computeWindShakeIntensity(BREEZE_MIN_DECIBEL - 5)).toBe(0);

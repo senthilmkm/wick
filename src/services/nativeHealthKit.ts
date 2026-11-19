@@ -6,6 +6,7 @@ import { Pedometer } from 'expo-sensors';
 
 let cachedAvailable: boolean | null = null;
 let authRequested = false;
+let inFlightAuth: Promise<void> | null = null;
 
 /**
  * Resets cached HealthKit availability/authorization flags (used in tests).
@@ -13,6 +14,7 @@ let authRequested = false;
 export function resetHealthKitSessionCache(): void {
   cachedAvailable = null;
   authRequested = false;
+  inFlightAuth = null;
 }
 
 /**
@@ -29,8 +31,18 @@ export async function fetchTodayHealthKitSteps(): Promise<number | null> {
     }
 
     if (!authRequested) {
-      await Healthkit.requestAuthorization([HKQuantityTypeIdentifier.stepCount]);
-      authRequested = true;
+      if (!inFlightAuth) {
+        inFlightAuth = Healthkit.requestAuthorization([HKQuantityTypeIdentifier.stepCount]).then(
+          () => {
+            authRequested = true;
+          }
+        );
+      }
+      try {
+        await inFlightAuth;
+      } finally {
+        inFlightAuth = null;
+      }
     }
 
     const now = new Date();
@@ -55,15 +67,33 @@ export async function fetchTodayHealthKitSteps(): Promise<number | null> {
  */
 export function subscribeToHealthKitSteps(onChange: () => void): () => void {
   try {
+    let disposed = false;
+    let resolvedUnsub: (() => unknown) | { remove: () => unknown } | null = null;
     const sub: unknown = Healthkit.subscribeToChanges(HKQuantityTypeIdentifier.stepCount, () => {
       onChange();
     });
-    return () => {
-      if (typeof sub === 'function') {
-        (sub as () => void)();
-      } else if (sub && typeof (sub as { remove?: () => void }).remove === 'function') {
-        (sub as { remove: () => void }).remove();
+    const invokeUnsub = (target: unknown) => {
+      if (typeof target === 'function') {
+        void Promise.resolve((target as () => unknown)()).catch(() => {});
+      } else if (target && typeof (target as { remove?: () => unknown }).remove === 'function') {
+        void Promise.resolve((target as { remove: () => unknown }).remove()).catch(() => {});
       }
+    };
+    if (sub && typeof (sub as Promise<unknown>).then === 'function') {
+      void (sub as Promise<unknown>)
+        .then((u) => {
+          resolvedUnsub = u as typeof resolvedUnsub;
+          if (disposed) {
+            invokeUnsub(u);
+          }
+        })
+        .catch(() => {});
+    } else {
+      resolvedUnsub = sub as typeof resolvedUnsub;
+    }
+    return () => {
+      disposed = true;
+      invokeUnsub(resolvedUnsub);
     };
   } catch {
     return () => {};

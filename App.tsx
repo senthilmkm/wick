@@ -211,7 +211,9 @@ function WickRoot() {
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stepsTodayRef = useRef(0);
+  const snapshotDateKeyRef = useRef<string>('');
   const manualBlowArmedUntilRef = useRef(0);
+  const manualBlowActiveRef = useRef(false);
   const goalCelebratedDateRef = useRef<string | null>(null);
 
   const [settings, setSettings] = useState<UserSettings>(() => storageService.loadSettings());
@@ -269,7 +271,8 @@ function WickRoot() {
 
   useEffect(() => {
     stepsTodayRef.current = snapshot.stepsToday;
-  }, [snapshot.stepsToday]);
+    snapshotDateKeyRef.current = snapshot.dateKey;
+  }, [snapshot.stepsToday, snapshot.dateKey]);
 
   useEffect(() => {
     const prev = prevCandleStateRef.current;
@@ -355,12 +358,12 @@ function WickRoot() {
       return;
     }
     const todayKey = getLocalDateKey(new Date());
-    if (snapshot.dateKey !== todayKey || steps >= hkBaselineStepsRef.current) {
+    if (snapshotDateKeyRef.current !== todayKey || steps >= hkBaselineStepsRef.current) {
       hkBaselineStepsRef.current = steps;
       pedometerSessionOffsetRef.current = 0;
     }
     applyStepTotal(Math.max(steps, hkBaselineStepsRef.current));
-  }, [applyStepTotal, snapshot.dateKey]);
+  }, [applyStepTotal]);
 
   // Initialize Keychain anti-abuse state, durable onboarding/settings fallback, and billing on mount
   useEffect(() => {
@@ -557,6 +560,24 @@ function WickRoot() {
       }
     });
 
+    const applyFilteredFriends = (remoteFriends: FriendCandle[]) => {
+      if (remoteFriends.length === 0) {
+        return;
+      }
+      let removedSet = new Set<string>();
+      try {
+        const rawRemoved = kvGet(KEY_REMOVED_FRIENDS);
+        if (rawRemoved) {
+          removedSet = new Set(JSON.parse(rawRemoved) as string[]);
+        }
+      } catch {
+        // ignore corrupt removed list
+      }
+      const filtered = remoteFriends.filter((f) => !removedSet.has(f.id));
+      setFriends(filtered);
+      kvSet(KEY_FRIENDS, JSON.stringify(filtered));
+    };
+
     const appSub = AppState.addEventListener('change', (state) => {
       const activeNow = state === 'active';
       setIsAppActive(activeNow);
@@ -565,12 +586,7 @@ function WickRoot() {
         void syncHealthKit();
         void cloudKitService
           .refreshFriendCandles()
-          .then((remoteFriends) => {
-            if (remoteFriends.length > 0) {
-              setFriends(remoteFriends);
-              kvSet(KEY_FRIENDS, JSON.stringify(remoteFriends));
-            }
-          })
+          .then(applyFilteredFriends)
           .catch(() => {});
       }
     });
@@ -638,7 +654,12 @@ function WickRoot() {
 
     let cancelled = false;
     void enableLanternBrightness().then((prev) => {
-      if (!cancelled && prev !== null) {
+      if (prev === null) {
+        return;
+      }
+      if (cancelled) {
+        void restoreLanternBrightness(prev);
+      } else {
         previousBrightnessRef.current = prev;
       }
     });
@@ -691,6 +712,7 @@ function WickRoot() {
       },
       deactivateMicSession: async () => {
         if (recording) {
+          recording.setOnRecordingStatusUpdate(null);
           await recording.stopAndUnloadAsync().catch(() => {});
           recording = null;
         }
@@ -704,6 +726,9 @@ function WickRoot() {
       }
       const ok = await detector.startBlowModal();
       if (!ok || cancelled) {
+        if (ok && cancelled) {
+          void detector.stopBlowModal();
+        }
         return;
       }
       try {
@@ -734,6 +759,9 @@ function WickRoot() {
           ) {
             manualBlowArmedUntilRef.current = 0;
             void detector.stopBlowModal().then(() => {
+              if (cancelled) {
+                return;
+              }
               setWindIntensity(0);
               void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               setSnapshot((prev) => {
@@ -864,8 +892,7 @@ function WickRoot() {
         partial.wakeMinute !== undefined ||
         partial.sleepHour !== undefined ||
         partial.sleepMinute !== undefined ||
-        partial.eveningNudgeEnabled !== undefined ||
-        partial.candleName !== undefined
+        partial.eveningNudgeEnabled !== undefined
       ) {
         void scheduleMorningWakeNotification(next);
       }
@@ -894,12 +921,21 @@ function WickRoot() {
       return;
     }
 
-    // Avoid dual Audio.Recording race condition when liveBreezeEnabled already holds the mic
-    if (settings.liveBreezeEnabled && activeTab === 'flame') {
+    // Avoid dual Audio.Recording race condition only when liveBreeze mic is actively running
+    const liveBreezeMicActive =
+      settings.liveBreezeEnabled &&
+      activeTab === 'flame' &&
+      snapshot.flameIntensity > 0 &&
+      snapshot.state !== 'NIGHT_SLEEP';
+    if (liveBreezeMicActive) {
       manualBlowArmedUntilRef.current = Date.now() + 8000;
       showToast('Blow into your mic now to extinguish...');
       return;
     }
+    if (manualBlowActiveRef.current) {
+      return;
+    }
+    manualBlowActiveRef.current = true;
 
     let recording: Audio.Recording | null = null;
     const detector = new AudioBlowDetector({
@@ -930,6 +966,7 @@ function WickRoot() {
 
     const started = await detector.startBlowModal();
     if (!started) {
+      manualBlowActiveRef.current = false;
       completeBlowOut();
       return;
     }
@@ -949,17 +986,23 @@ function WickRoot() {
             clearTimeout(timeoutId);
             timeoutId = null;
           }
-          void detector.stopBlowModal().then(completeBlowOut);
+          rec.setOnRecordingStatusUpdate(null);
+          void detector.stopBlowModal().then(() => {
+            manualBlowActiveRef.current = false;
+            completeBlowOut();
+          });
         }
       });
       await rec.startAsync();
       timeoutId = setTimeout(() => {
+        manualBlowActiveRef.current = false;
         void detector.stopBlowModal();
       }, 6000);
     } catch {
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
+      manualBlowActiveRef.current = false;
       await detector.stopBlowModal();
       completeBlowOut();
     }
@@ -975,11 +1018,15 @@ function WickRoot() {
       Date.now()
     );
     const url = buildSparkUniversalLink(token);
-    await Share.share({
-      title: 'Save my Wick!',
-      message: `My wick is running low! Walk 500 steps to reignite my candle: ${url}`,
-      url,
-    });
+    try {
+      await Share.share({
+        title: 'Save my Wick!',
+        message: `My wick is running low! Walk 500 steps to reignite my candle: ${url}`,
+        url,
+      });
+    } catch {
+      showToast('Could not open Share Sheet.');
+    }
   };
 
   const handleInviteFriend = async () => {
@@ -1020,7 +1067,7 @@ function WickRoot() {
           .replace('_', ' ')} (${snapshot.stepsToday.toLocaleString('en-US')} steps today) — Keep your wick lit!`,
       });
       if (shareRes.action !== Share.dismissedAction) {
-        const updated = recordVideoExport(entitlement, now);
+        const updated = recordVideoExport(entitlementRef.current, now);
         setEntitlement(updated);
         await storageService.saveVideoExportQuota(updated.weekKey, updated.freeVideoExportsThisWeek);
       }
