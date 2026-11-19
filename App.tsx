@@ -67,15 +67,39 @@ import {
 
 type TabKey = 'flame' | 'ledger' | 'circle' | 'sanctuary';
 
-const mmkv = new MMKV({ id: 'wick.local.v1' });
+const memoryFallback = new Map<string, string>();
+let mmkvInstance: MMKV | null = null;
+try {
+  mmkvInstance = new MMKV({ id: 'wick.local.v1' });
+} catch {
+  mmkvInstance = null;
+}
+
+const kvGet = (key: string): string | undefined => {
+  try {
+    return mmkvInstance ? mmkvInstance.getString(key) : memoryFallback.get(key);
+  } catch {
+    return memoryFallback.get(key);
+  }
+};
+
+const kvSet = (key: string, val: string): void => {
+  memoryFallback.set(key, val);
+  try {
+    mmkvInstance?.set(key, val);
+  } catch {
+    // fallback already stored in memoryFallback
+  }
+};
+
 const KEY_ONBOARDED = 'wick.onboarded.v1';
 const KEY_PRO_CACHE = 'wick.pro_cached.v1';
 const REVENUECAT_IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY;
 
 const storageService = new LocalStorageService(
   {
-    getString: (k) => mmkv.getString(k),
-    set: (k, v) => mmkv.set(k, v),
+    getString: kvGet,
+    set: kvSet,
   },
   {
     getItemAsync: (k) => SecureStore.getItemAsync(k),
@@ -83,14 +107,54 @@ const storageService = new LocalStorageService(
   },
   {
     writeAppGroupSnapshot: (payload) => {
-      mmkv.set('wick.widget.snapshot', payload);
+      kvSet('wick.widget.snapshot', payload);
     },
     reloadAllTimelines: () => {},
   }
 );
 
+class AppErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { errorMessage: string | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { errorMessage: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { errorMessage: error?.message ?? 'Unexpected error' };
+  }
+
+  render() {
+    if (this.state.errorMessage) {
+      return (
+        <View style={[styles.flex, styles.errorFallback]}>
+          <Text style={styles.errorTitle}>Wick recovered from an issue</Text>
+          <Text style={styles.errorBody}>{this.state.errorMessage}</Text>
+          <Pressable
+            style={styles.errorBtn}
+            onPress={() => this.setState({ errorMessage: null })}
+          >
+            <Text style={styles.errorBtnText}>Reload Candle</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
-  const [onboarded, setOnboarded] = useState<boolean>(() => mmkv.getString(KEY_ONBOARDED) === '1');
+  return (
+    <AppErrorBoundary>
+      <WickRoot />
+    </AppErrorBoundary>
+  );
+}
+
+function WickRoot() {
+  const [onboarded, setOnboarded] = useState<boolean>(() => kvGet(KEY_ONBOARDED) === '1');
   const [activeTab, setActiveTab] = useState<TabKey>('flame');
   const [tabsVisible, setTabsVisible] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -105,7 +169,7 @@ export default function App() {
   const [activeRescue, setActiveRescue] = useState<ActiveSparkRescue | null>(null);
   const rescueBaselineStepsRef = useRef<number | null>(null);
   const [entitlement, setEntitlement] = useState<EntitlementState>(() => ({
-    isPro: mmkv.getString(KEY_PRO_CACHE) === '1',
+    isPro: kvGet(KEY_PRO_CACHE) === '1',
     isEligibleForIntroTrial: true,
     starterDomeClaimed: false,
     firstInstallAt: Date.now(),
@@ -187,7 +251,7 @@ export default function App() {
         return;
       }
       if (remotePro) {
-        mmkv.set(KEY_PRO_CACHE, '1');
+        kvSet(KEY_PRO_CACHE, '1');
       }
       setEntitlement((prev) => ({
         ...prev,
@@ -446,7 +510,7 @@ export default function App() {
           initialGoal={settings.dailyStepGoal}
           onComplete={(goal) => {
             handleUpdateSettings({ dailyStepGoal: goal });
-            mmkv.set(KEY_ONBOARDED, '1');
+            kvSet(KEY_ONBOARDED, '1');
             setOnboarded(true);
             void scheduleMorningWakeNotification({ ...settings, dailyStepGoal: goal });
             void syncHealthKit();
@@ -560,7 +624,7 @@ export default function App() {
           onRestorePurchases={() => {
             void restoreProPurchases(REVENUECAT_IOS_KEY).then((restored) => {
               if (restored) {
-                mmkv.set(KEY_PRO_CACHE, '1');
+                kvSet(KEY_PRO_CACHE, '1');
                 setEntitlement((e) => ({ ...e, isPro: true, isEligibleForIntroTrial: false }));
                 showToast('Wick Pro restored!');
               } else {
@@ -587,7 +651,7 @@ export default function App() {
         onStartPro={() => {
           void purchaseProPackage(REVENUECAT_IOS_KEY).then(({ purchased }) => {
             if (purchased) {
-              mmkv.set(KEY_PRO_CACHE, '1');
+              kvSet(KEY_PRO_CACHE, '1');
               setEntitlement((e) => ({ ...e, isPro: true, isEligibleForIntroTrial: false }));
               setPaywallReason(null);
               showToast('Welcome to Wick Pro!');
@@ -600,7 +664,7 @@ export default function App() {
           void restoreProPurchases(REVENUECAT_IOS_KEY).then((restored) => {
             setPaywallReason(null);
             if (restored) {
-              mmkv.set(KEY_PRO_CACHE, '1');
+              kvSet(KEY_PRO_CACHE, '1');
               setEntitlement((e) => ({ ...e, isPro: true, isEligibleForIntroTrial: false }));
               showToast('Wick Pro restored!');
             } else {
@@ -649,6 +713,22 @@ export default function App() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  errorFallback: {
+    backgroundColor: '#0A0A0C',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    gap: 12,
+  },
+  errorTitle: { color: '#FF9F43', fontSize: 18, fontWeight: '700' },
+  errorBody: { color: '#A1A1AA', fontSize: 13, textAlign: 'center' },
+  errorBtn: {
+    backgroundColor: '#FF9F43',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 16,
+  },
+  errorBtnText: { color: '#0A0A0C', fontWeight: '700', fontSize: 14 },
   toastBanner: {
     position: 'absolute',
     bottom: 102,
