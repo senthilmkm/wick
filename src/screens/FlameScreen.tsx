@@ -1,3 +1,4 @@
+import { Canvas, LinearGradient, RoundedRect, Circle, vec } from '@shopify/react-native-skia';
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Candle3DCanvas } from '../components/Candle3DCanvas';
@@ -77,21 +78,50 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
         />
       </Pressable>
 
-      {/* Pocket Lighter Button (shown only when unlit for zero-friction ignition) */}
+      {/* Realistic Metallic Pocket Lighter Button (shown only when unlit) */}
       {snapshot.state === 'UNLIT_MORNING' && (
         <View style={styles.lighterContainer}>
           <Pressable
-            style={styles.lighterDevice}
+            style={({ pressed }) => [
+              styles.lighterDevice,
+              pressed && { transform: [{ scale: 0.94 }, { translateY: 2 }] },
+            ]}
             onPress={onStrikeLighter}
             accessible
             accessibilityRole="button"
             accessibilityLabel="Strike pocket lighter to ignite your candle"
           >
-            <View style={styles.lighterCap} />
-            <View style={styles.lighterWheel} />
-            <View style={styles.lighterBody}>
-              <Text style={styles.lighterSparkText}>Strike</Text>
-            </View>
+            <Canvas style={styles.lighterCanvas}>
+              {/* Open hinged metal lid */}
+              <RoundedRect x={6} y={4} width={22} height={24} r={5}>
+                <LinearGradient
+                  start={vec(6, 4)}
+                  end={vec(28, 4)}
+                  colors={['#52525B', '#D4D4D8', '#3F3F46']}
+                />
+              </RoundedRect>
+              {/* Windguard chimney */}
+              <RoundedRect x={30} y={14} width={22} height={16} r={3}>
+                <LinearGradient
+                  start={vec(30, 14)}
+                  end={vec(52, 14)}
+                  colors={['#71717A', '#E4E4E7', '#52525B']}
+                />
+              </RoundedRect>
+              {/* Knurled brass flint wheel */}
+              <Circle cx={55} cy={22} r={6} color="#F59E0B" />
+              <Circle cx={55} cy={22} r={2.5} color="#78350F" />
+              {/* Brushed chrome lighter body */}
+              <RoundedRect x={14} y={30} width={48} height={54} r={9}>
+                <LinearGradient
+                  start={vec(14, 30)}
+                  end={vec(62, 30)}
+                  colors={['#27272A', '#71717A', '#A1A1AA', '#3F3F46', '#18181B']}
+                  positions={[0, 0.25, 0.45, 0.8, 1]}
+                />
+              </RoundedRect>
+            </Canvas>
+            <Text style={styles.lighterSparkText}>Strike Lighter</Text>
           </Pressable>
           <Text style={styles.lighterHint}>Tap lighter or take 5 steps to ignite</Text>
         </View>
@@ -208,39 +238,18 @@ const styles = StyleSheet.create({
   },
   lighterDevice: {
     alignItems: 'center',
+    gap: 2,
   },
-  lighterCap: {
-    width: 24,
-    height: 10,
-    borderTopLeftRadius: 6,
-    borderTopRightRadius: 6,
-    backgroundColor: '#A1A1AA',
-    borderBottomWidth: 1,
-    borderBottomColor: '#52525B',
-  },
-  lighterWheel: {
-    width: 12,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#FF9F43',
-    marginVertical: 1,
-  },
-  lighterBody: {
-    width: 44,
-    height: 46,
-    borderRadius: 10,
-    backgroundColor: '#27272A',
-    borderWidth: 1,
-    borderColor: '#3F3F46',
-    alignItems: 'center',
-    justifyContent: 'center',
+  lighterCanvas: {
+    width: 76,
+    height: 88,
   },
   lighterSparkText: {
     color: '#FF9F43',
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    letterSpacing: 0.8,
   },
   lighterHint: {
     color: '#A1A1AA',

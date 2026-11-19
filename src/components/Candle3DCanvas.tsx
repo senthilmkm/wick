@@ -17,6 +17,7 @@ import {
   Easing,
   useDerivedValue,
   useSharedValue,
+  withDelay,
   withRepeat,
   withSequence,
   withSpring,
@@ -36,22 +37,31 @@ const CANVAS_W = Math.min(SCREEN_W, 420);
 const CANVAS_H = 520;
 const CX = CANVAS_W / 2;
 
+const SPARK_VECTORS = [
+  { dx: -32, dy: -38 },
+  { dx: 30, dy: -34 },
+  { dx: -20, dy: -54 },
+  { dx: 22, dy: -48 },
+  { dx: -8, dy: -62 },
+  { dx: 10, dy: -58 },
+];
+
 function createTeardropPath(cx: number, baseY: number, w: number, h: number) {
   const p = Skia.Path.Make();
   p.moveTo(cx, baseY - h);
   p.cubicTo(
-    cx + w * 0.55,
-    baseY - h * 0.55,
-    cx + w * 0.72,
+    cx + w * 0.52,
+    baseY - h * 0.58,
+    cx + w * 0.74,
     baseY - h * 0.14,
     cx,
     baseY
   );
   p.cubicTo(
-    cx - w * 0.72,
+    cx - w * 0.74,
     baseY - h * 0.14,
-    cx - w * 0.55,
-    baseY - h * 0.55,
+    cx - w * 0.52,
+    baseY - h * 0.58,
     cx,
     baseY - h
   );
@@ -68,12 +78,13 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
   const breath = useSharedValue(1);
   const sway = useSharedValue(0);
   const bloom = useSharedValue(1);
+  const sparkProgress = useSharedValue(0);
   const smokeDrift = useSharedValue(0);
 
   useEffect(() => {
     const anxious = snapshot.state === 'FLICKERING' || snapshot.state === 'DYING_EMBER';
-    const breathMs = anxious ? 260 : 1200;
-    const minBreath = anxious ? 0.82 : 0.94;
+    const breathMs = anxious ? 250 : 1250;
+    const minBreath = anxious ? 0.8 : 0.94;
 
     breath.value = withRepeat(
       withSequence(
@@ -86,12 +97,12 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
 
     sway.value = withRepeat(
       withSequence(
-        withTiming(anxious ? -0.09 : -0.03, {
-          duration: anxious ? 210 : 1500,
+        withTiming(anxious ? -0.1 : -0.025, {
+          duration: anxious ? 200 : 1600,
           easing: Easing.inOut(Easing.sin),
         }),
-        withTiming(anxious ? 0.09 : 0.03, {
-          duration: anxious ? 230 : 1700,
+        withTiming(anxious ? 0.1 : 0.025, {
+          duration: anxious ? 220 : 1800,
           easing: Easing.inOut(Easing.sin),
         })
       ),
@@ -100,13 +111,19 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
     );
 
     if (snapshot.state === 'IGNITING') {
-      bloom.value = 0.2;
+      bloom.value = 0.15;
       bloom.value = withSequence(
-        withSpring(1.28, { damping: 9, stiffness: 170 }),
+        withSpring(1.3, { damping: 8, stiffness: 175 }),
         withTiming(1, { duration: 480, easing: Easing.out(Easing.quad) })
+      );
+      sparkProgress.value = 0;
+      sparkProgress.value = withDelay(
+        30,
+        withTiming(1, { duration: 680, easing: Easing.out(Easing.cubic) })
       );
     } else {
       bloom.value = 1;
+      sparkProgress.value = 0;
     }
 
     if (snapshot.state === 'SMOKING_GRACE') {
@@ -118,46 +135,76 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
     } else {
       smokeDrift.value = 0;
     }
-  }, [snapshot.state, resumeTick, breath, sway, bloom, smokeDrift]);
+  }, [snapshot.state, resumeTick, breath, sway, bloom, sparkProgress, smokeDrift]);
 
-  const candleHeight = Math.round(230 - snapshot.meltProgress * 105);
-  const candleW = 118;
+  const candleHeight = Math.round(235 - snapshot.meltProgress * 110);
+  const candleW = 122;
   const candleLeft = CX - candleW / 2;
-  const candleBottom = CANVAS_H - 36;
+  const candleBottom = CANVAS_H - 38;
   const candleTop = candleBottom - candleHeight;
   const wickBaseY = candleTop + 6;
   const flameBaseY = wickBaseY - 14;
 
   const intensity = snapshot.flameIntensity;
   const isNight = snapshot.state === 'NIGHT_SLEEP';
-  const flameH = Math.round(28 + intensity * 56);
-  const flameW = Math.round(18 + intensity * 24);
+  const flameH = Math.round(30 + intensity * 58);
+  const flameW = Math.round(18 + intensity * 25);
 
   const outerFlamePath = useMemo(
-    () => createTeardropPath(CX, flameBaseY, flameW * 1.15, flameH * 1.08),
+    () => createTeardropPath(CX, flameBaseY, flameW * 1.18, flameH * 1.1),
     [flameBaseY, flameW, flameH]
   );
   const midFlamePath = useMemo(
-    () => createTeardropPath(CX, flameBaseY, flameW * 0.85, flameH * 0.92),
+    () => createTeardropPath(CX, flameBaseY, flameW * 0.86, flameH * 0.94),
     [flameBaseY, flameW, flameH]
   );
   const innerCorePath = useMemo(
-    () => createTeardropPath(CX, flameBaseY - 3, flameW * 0.42, flameH * 0.52),
+    () => createTeardropPath(CX, flameBaseY - 3, flameW * 0.42, flameH * 0.54),
     [flameBaseY, flameW, flameH]
   );
   const blueBasePath = useMemo(
-    () => createTeardropPath(CX, flameBaseY + 1, flameW * 0.48, flameH * 0.22),
+    () => createTeardropPath(CX, flameBaseY + 1, flameW * 0.5, flameH * 0.24),
     [flameBaseY, flameW, flameH]
   );
 
-  const dripPath = useMemo(() => {
+  // Curved braided wick
+  const wickPath = useMemo(() => {
     const p = Skia.Path.Make();
-    p.moveTo(candleLeft + 22, candleTop + 10);
-    p.quadTo(candleLeft + 18, candleTop + 36, candleLeft + 23, candleTop + 46);
-    p.quadTo(candleLeft + 28, candleTop + 36, candleLeft + 27, candleTop + 10);
+    p.moveTo(CX, wickBaseY);
+    p.quadTo(CX + 2.5, wickBaseY - 8, CX - 0.5, wickBaseY - 15);
+    return p;
+  }, [wickBaseY]);
+
+  // Dynamic melting wax drips that grow longer as meltProgress increases
+  const dripLeftLen = Math.round(24 + snapshot.meltProgress * 58);
+  const dripRightLen = Math.round(16 + snapshot.meltProgress * 42);
+  const dripLeftPath = useMemo(() => {
+    const p = Skia.Path.Make();
+    p.moveTo(candleLeft + 20, candleTop + 8);
+    p.quadTo(candleLeft + 15, candleTop + dripLeftLen * 0.7, candleLeft + 22, candleTop + dripLeftLen);
+    p.quadTo(candleLeft + 29, candleTop + dripLeftLen * 0.7, candleLeft + 26, candleTop + 8);
     p.close();
     return p;
-  }, [candleLeft, candleTop]);
+  }, [candleLeft, candleTop, dripLeftLen]);
+
+  const dripRightPath = useMemo(() => {
+    const p = Skia.Path.Make();
+    p.moveTo(candleLeft + candleW - 28, candleTop + 10);
+    p.quadTo(
+      candleLeft + candleW - 32,
+      candleTop + dripRightLen * 0.65,
+      candleLeft + candleW - 26,
+      candleTop + dripRightLen
+    );
+    p.quadTo(
+      candleLeft + candleW - 21,
+      candleTop + dripRightLen * 0.65,
+      candleLeft + candleW - 23,
+      candleTop + 10
+    );
+    p.close();
+    return p;
+  }, [candleLeft, candleW, candleTop, dripRightLen]);
 
   const flameTransform = useDerivedValue(() => [
     { translateX: CX },
@@ -172,20 +219,20 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
   const haloTransform = useDerivedValue(() => [
     { translateX: CX },
     { translateY: flameBaseY - flameH * 0.45 },
-    { scale: (0.94 + intensity * 0.22 * breath.value) * bloom.value },
+    { scale: (0.94 + intensity * 0.24 * breath.value) * bloom.value },
     { translateX: -CX },
     { translateY: -(flameBaseY - flameH * 0.45) },
   ]);
 
   const smokeTransform = useDerivedValue(() => [
-    { translateY: -smokeDrift.value * 76 },
-    { scaleX: 1 + smokeDrift.value * 0.8 },
+    { translateY: -smokeDrift.value * 80 },
+    { scaleX: 1 + smokeDrift.value * 0.85 },
   ]);
 
   const visibleLayers = waxLayers.slice(-14);
   const glowColor = isNight ? '#7CC6FE' : theme.ambientGlow;
   const outerColor = isNight ? '#38BDF8' : '#FF7A18';
-  const midTopColor = isNight ? '#E0F2FE' : '#FFF9E2';
+  const midTopColor = isNight ? '#E0F2FE' : '#FFFBE6';
   const midBottomColor = isNight ? '#0284C7' : snapshot.flameColorHex;
 
   return (
@@ -195,48 +242,64 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
       accessibilityLabel={`Your wick is ${snapshot.state.toLowerCase().replace('_', ' ')}, ${snapshot.stepsToday} steps today`}
     >
       <Canvas style={styles.canvas}>
-        {/* 1. Wide Volumetric Room Light Halo */}
+        {/* 1. 3-Stage Volumetric Room Light Around Flame */}
         {intensity > 0 && (
           <Group transform={haloTransform}>
-            <Circle cx={CX} cy={flameBaseY - flameH * 0.45} r={210}>
+            <Circle cx={CX} cy={flameBaseY - flameH * 0.45} r={245}>
               <RadialGradient
                 c={vec(CX, flameBaseY - flameH * 0.45)}
-                r={210}
+                r={245}
                 colors={[
-                  `${glowColor}55`,
-                  `${glowColor}22`,
+                  `${glowColor}52`,
+                  `${glowColor}20`,
                   `${glowColor}08`,
                   'transparent',
                 ]}
               />
             </Circle>
-            <Circle cx={CX} cy={flameBaseY - flameH * 0.4} r={74}>
+            <Circle cx={CX} cy={flameBaseY - flameH * 0.4} r={108}>
               <RadialGradient
                 c={vec(CX, flameBaseY - flameH * 0.4)}
-                r={74}
+                r={108}
                 colors={[
-                  isNight ? 'rgba(186,230,253,0.45)' : 'rgba(255,244,214,0.52)',
-                  isNight ? 'rgba(56,189,248,0.18)' : 'rgba(255,140,36,0.22)',
+                  isNight ? 'rgba(186,230,253,0.42)' : 'rgba(255,220,140,0.45)',
+                  isNight ? 'rgba(56,189,248,0.16)' : 'rgba(255,130,25,0.18)',
                   'transparent',
                 ]}
               />
-              <BlurMask blur={24} style="normal" />
+              <BlurMask blur={34} style="normal" />
+            </Circle>
+            <Circle cx={CX} cy={flameBaseY - flameH * 0.35} r={42}>
+              <RadialGradient
+                c={vec(CX, flameBaseY - flameH * 0.35)}
+                r={42}
+                colors={[
+                  isNight ? 'rgba(224,242,254,0.6)' : 'rgba(255,248,220,0.68)',
+                  'transparent',
+                ]}
+              />
+              <BlurMask blur={16} style="normal" />
             </Circle>
           </Group>
         )}
 
-        {/* 2. 3D Wax Cylinder with Cylindrical Shading & Subsurface Scattering */}
+        {/* Grounded Base Shadow */}
+        <Oval x={candleLeft - 14} y={candleBottom - 10} width={candleW + 28} height={24} color="rgba(0,0,0,0.65)">
+          <BlurMask blur={14} style="normal" />
+        </Oval>
+
+        {/* 2. 3D Wax Cylinder with Cylindrical Shading */}
         <RoundedRect
           x={candleLeft}
           y={candleTop}
           width={candleW}
           height={candleHeight}
-          r={16}
+          r={18}
         >
           <LinearGradient
             start={vec(candleLeft, candleTop)}
             end={vec(candleLeft + candleW, candleTop)}
-            colors={['#9E9386', '#EFE7DC', '#FAF6F0', '#DDD3C5', '#7F756A']}
+            colors={['#8F8579', '#EAE2D6', '#FBF7F1', '#D9CFC1', '#746A60']}
             positions={[0, 0.22, 0.42, 0.78, 1]}
           />
         </RoundedRect>
@@ -244,8 +307,8 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
         {/* Hardened Day-N Wax Bands */}
         {visibleLayers.map((layer, idx) => {
           const bandH = Math.max(4, Math.round(layer.thicknessMm * 1.6));
-          const bandY = candleBottom - 10 - (idx + 1) * (bandH + 1);
-          if (bandY <= candleTop + 28) {
+          const bandY = candleBottom - 12 - (idx + 1) * (bandH + 1);
+          if (bandY <= candleTop + 32) {
             return null;
           }
           return (
@@ -262,62 +325,63 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
           );
         })}
 
-        {/* Subsurface Scattering (warm light penetrating top of wax) */}
+        {/* Deep Subsurface Scattering (SSS) through top wax */}
         {intensity > 0 && (
           <RoundedRect
             x={candleLeft}
             y={candleTop}
             width={candleW}
-            height={58}
-            r={16}
+            height={72}
+            r={18}
           >
             <RadialGradient
-              c={vec(CX, candleTop + 6)}
-              r={68}
+              c={vec(CX, candleTop + 8)}
+              r={78}
               colors={[
-                isNight ? 'rgba(124,198,254,0.45)' : 'rgba(255,180,70,0.58)',
-                isNight ? 'rgba(124,198,254,0.12)' : 'rgba(255,120,20,0.16)',
+                isNight ? 'rgba(124,198,254,0.48)' : 'rgba(255,175,65,0.62)',
+                isNight ? 'rgba(124,198,254,0.12)' : 'rgba(255,115,20,0.18)',
                 'transparent',
               ]}
             />
           </RoundedRect>
         )}
 
-        {/* 3D Elliptical Wax Top Rim & Molten Pool */}
-        <Oval x={candleLeft} y={candleTop - 8} width={candleW} height={22} color="#E8DFD3" />
-        <Oval x={candleLeft + 8} y={candleTop - 4} width={candleW - 16} height={15}>
+        {/* 3D Elliptical Wax Crater & Glowing Molten Pool */}
+        <Oval x={candleLeft} y={candleTop - 9} width={candleW} height={24} color="#E6DDD0" />
+        <Oval x={candleLeft + 8} y={candleTop - 4} width={candleW - 16} height={16}>
           <RadialGradient
             c={vec(CX, candleTop + 4)}
-            r={52}
+            r={54}
             colors={[
-              intensity > 0 ? (isNight ? '#BAE6FD' : '#FFE8B6') : '#D4C8BA',
-              '#E5DACD',
-              '#C7BBAE',
+              intensity > 0 ? (isNight ? '#BAE6FD' : '#FFECB8') : '#CFC3B4',
+              '#E3D8CA',
+              '#BFB2A4',
             ]}
           />
         </Oval>
 
-        {/* Realistic Wax Drip */}
-        <Path path={dripPath} color="#F3ECE2" opacity={0.92} />
+        {/* Realistic Melting Wax Drips */}
+        <Path path={dripLeftPath} color="#F5EFE6" opacity={0.92} />
+        <Path path={dripRightPath} color="#EAE2D6" opacity={0.88} />
 
-        {/* Braided Wick */}
-        <RoundedRect
-          x={CX - 1.5}
-          y={wickBaseY - 14}
-          width={3}
-          height={16}
-          r={1.5}
-          color={snapshot.state === 'SMOKING_GRACE' ? '#DC2626' : '#27272A'}
+        {/* Curved Braided Wick + Glowing Ember Tip */}
+        <Path
+          path={wickPath}
+          color="#1F1F23"
+          style="stroke"
+          strokeWidth={2.8}
+          strokeCap="round"
         />
+        {(intensity > 0 || snapshot.state === 'SMOKING_GRACE') && (
+          <Circle cx={CX - 0.5} cy={wickBaseY - 15} r={2.2} color="#FF6B1A" />
+        )}
 
-        {/* 3. Photorealistic Multi-Layer Flame */}
+        {/* 3. Photorealistic 4-Layer Flame */}
         {intensity > 0 && (
           <Group transform={flameTransform}>
-            {/* Outer warm bloom */}
-            <Path path={outerFlamePath} color={outerColor} opacity={0.55}>
-              <BlurMask blur={14} style="normal" />
+            <Path path={outerFlamePath} color={outerColor} opacity={0.52}>
+              <BlurMask blur={16} style="normal" />
             </Path>
-            {/* Mid golden-amber teardrop */}
             <Path path={midFlamePath}>
               <LinearGradient
                 start={vec(CX, flameBaseY - flameH)}
@@ -325,21 +389,25 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
                 colors={[midTopColor, '#FFB703', midBottomColor]}
               />
             </Path>
-            {/* Incandescent white-hot core */}
-            <Path path={innerCorePath} color="#FFFFFF" opacity={0.95}>
-              <BlurMask blur={3} style="normal" />
+            <Path path={innerCorePath} color="#FFFFFF" opacity={0.96}>
+              <BlurMask blur={2.5} style="normal" />
             </Path>
-            {/* Authentic blue flame base right at the wick */}
-            <Path path={blueBasePath} color="#3B82F6" opacity={0.55}>
+            <Path path={blueBasePath} color="#2563EB" opacity={0.62}>
               <BlurMask blur={4} style="normal" />
             </Path>
           </Group>
         )}
 
+        {/* Flint Sparks on Ignition */}
+        {snapshot.state === 'IGNITING' &&
+          SPARK_VECTORS.map((sp, i) => (
+            <SkiaSpark key={i} progress={sparkProgress} cx={CX} baseY={flameBaseY} dx={sp.dx} dy={sp.dy} />
+          ))}
+
         {/* 4. Rising Smoke Wisp in SMOKING_GRACE */}
         {snapshot.state === 'SMOKING_GRACE' && (
           <Group transform={smokeTransform}>
-            <Circle cx={CX} cy={flameBaseY - 14} r={10} color="rgba(161,161,170,0.4)">
+            <Circle cx={CX} cy={flameBaseY - 14} r={10} color="rgba(161,161,170,0.42)">
               <BlurMask blur={10} style="normal" />
             </Circle>
           </Group>
@@ -348,11 +416,11 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
         {/* 5. Glass Dome (24h Rest Freeze) */}
         {snapshot.state === 'GLASS_DOME' && (
           <RoundedRect
-            x={CX - 86}
-            y={candleTop - 110}
-            width={172}
-            height={candleHeight + 124}
-            r={86}
+            x={CX - 88}
+            y={candleTop - 115}
+            width={176}
+            height={candleHeight + 130}
+            r={88}
             color="rgba(255,255,255,0.06)"
             style="fill"
           />
@@ -360,6 +428,19 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
       </Canvas>
     </View>
   );
+};
+
+const SkiaSpark: React.FC<{
+  progress: { value: number };
+  cx: number;
+  baseY: number;
+  dx: number;
+  dy: number;
+}> = ({ progress, cx, baseY, dx, dy }) => {
+  const x = useDerivedValue(() => cx + progress.value * dx);
+  const y = useDerivedValue(() => baseY + progress.value * dy + progress.value * progress.value * 20);
+  const opacity = useDerivedValue(() => (progress.value > 0 ? 1 - progress.value : 0));
+  return <Circle cx={x} cy={y} r={2.4} color="#FFF9E2" opacity={opacity} />;
 };
 
 const styles = StyleSheet.create({
