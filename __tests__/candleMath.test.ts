@@ -5,6 +5,7 @@ import {
   computeFlameIntensity,
   computePaceRatio,
   deriveWaxLayerSpec,
+  formatTimeLeftLabel,
   getFlameColorHex,
   getLocalDateKey,
   getLocalWeekKey,
@@ -87,5 +88,31 @@ describe('candleMath', () => {
     expect(deriveWaxLayerSpec(7200, 8000).waxGramsEarned).toBe(100);
     expect(deriveWaxLayerSpec(5000, 8000).waxGramsEarned).toBe(70);
     expect(deriveWaxLayerSpec(2000, 8000).waxGramsEarned).toBe(35);
+  });
+
+  it('formats Option-1 time left labels accurately across all states and schedules', () => {
+    expect(formatTimeLeftLabel(new Date(2026, 10, 19, 14, 0), 23, 0, 200, 3000, 'NIGHT_SLEEP')).toBe(
+      'Resting until morning'
+    );
+    expect(formatTimeLeftLabel(new Date(2026, 10, 19, 14, 0), 23, 0, 200, 3000, 'GLASS_DOME')).toBe(
+      'Paused (Glass Dome)'
+    );
+    expect(formatTimeLeftLabel(new Date(2026, 10, 19, 14, 0), 23, 0, 3200, 3000, 'BLAZING')).toBe(
+      'Goal reached'
+    );
+    expect(formatTimeLeftLabel(new Date(2026, 10, 19, 17, 40), 23, 0, 1200, 3000, 'STEADY')).toBe(
+      '5h 20m left today'
+    );
+    expect(formatTimeLeftLabel(new Date(2026, 10, 19, 22, 15), 23, 0, 1200, 3000, 'STEADY')).toBe(
+      '45m left today'
+    );
+    // Overnight sleep (e.g. 01:00 AM) when current time is 22:00 -> 3h 0m left
+    expect(formatTimeLeftLabel(new Date(2026, 10, 19, 22, 0), 1, 0, 1200, 3000, 'STEADY')).toBe(
+      '3h 0m left today'
+    );
+    // Past standard bedtime (23:30 vs 23:00)
+    expect(formatTimeLeftLabel(new Date(2026, 10, 19, 23, 30), 23, 0, 1200, 3000, 'STEADY')).toBe(
+      'Bedtime reached'
+    );
   });
 });

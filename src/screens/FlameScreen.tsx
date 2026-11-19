@@ -3,10 +3,12 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Candle3DCanvas } from '../components/Candle3DCanvas';
 import { InfoModal } from '../components/InfoModal';
-import { CandleSnapshot, WaxLayer, WickTheme } from '../types/wick';
+import { formatTimeLeftLabel } from '../engine/candleMath';
+import { CandleSnapshot, UserSettings, WaxLayer, WickTheme } from '../types/wick';
 
 interface FlameScreenProps {
   snapshot: CandleSnapshot;
+  settings: UserSettings;
   theme: WickTheme;
   waxLayers: WaxLayer[];
   resumeTick?: number;
@@ -23,6 +25,7 @@ interface FlameScreenProps {
 
 export const FlameScreen: React.FC<FlameScreenProps> = ({
   snapshot,
+  settings,
   theme,
   waxLayers,
   resumeTick,
@@ -51,13 +54,26 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
     onToggleControlsVisibility();
   };
 
+  const timeLeftLabel = formatTimeLeftLabel(
+    new Date(),
+    settings.sleepHour,
+    settings.sleepMinute,
+    snapshot.stepsToday,
+    settings.dailyStepGoal,
+    snapshot.state
+  );
+
   return (
     <View style={styles.root}>
-      {/* Top Minimal Corner Actions */}
+      {/* Top Minimal Corner Actions (Two-Line Micro-Header) */}
       <View style={styles.topRow}>
-        <Text style={[styles.streakBadge, { color: theme.primaryText }]}>
-          Day {snapshot.streakDays} • {snapshot.stepsToday.toLocaleString('en-US')} steps
-        </Text>
+        <View style={styles.headerLeft}>
+          <Text style={[styles.streakBadge, { color: theme.primaryText }]}>
+            Day {snapshot.streakDays} • {snapshot.stepsToday.toLocaleString('en-US')} /{' '}
+            {settings.dailyStepGoal.toLocaleString('en-US')}
+          </Text>
+          <Text style={styles.timeLeftSub}>{timeLeftLabel}</Text>
+        </View>
         <View style={styles.topRightActions}>
           {needsSpark && (
             <Pressable style={styles.sparkBtn} onPress={onSendSpark}>
@@ -226,10 +242,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  headerLeft: {
+    gap: 2,
+  },
   streakBadge: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
-    opacity: 0.8,
+    opacity: 0.9,
+  },
+  timeLeftSub: {
+    color: '#A1A1AA',
+    fontSize: 11,
+    fontWeight: '500',
   },
   topRightActions: {
     flexDirection: 'row',

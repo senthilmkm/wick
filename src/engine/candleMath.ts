@@ -179,3 +179,48 @@ export function deriveWaxLayerSpec(
   }
   return { colorHex: '#8D99AE', thicknessMm: 1.5, waxGramsEarned: 35 };
 }
+
+/**
+ * Computes the concise Option-1 sub-line label showing hours & minutes left
+ * until sleepHour:sleepMinute, or contextual status when sleeping/paused/goal met.
+ */
+export function formatTimeLeftLabel(
+  now: Date,
+  sleepHour: number,
+  sleepMinute: number,
+  stepsToday: number,
+  dailyStepGoal: number,
+  state: CandleState
+): string {
+  if (state === 'NIGHT_SLEEP') {
+    return 'Resting until morning';
+  }
+  if (state === 'GLASS_DOME') {
+    return 'Paused (Glass Dome)';
+  }
+  if (stepsToday >= dailyStepGoal) {
+    return 'Goal reached';
+  }
+
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const sleepTotal = sleepHour * 60 + sleepMinute;
+
+  let remaining: number;
+  if (nowMinutes < sleepTotal) {
+    remaining = sleepTotal - nowMinutes;
+  } else if (sleepHour < 12 && nowMinutes > sleepTotal) {
+    remaining = 1440 - nowMinutes + sleepTotal;
+  } else {
+    remaining = 0;
+  }
+
+  if (remaining <= 0) {
+    return 'Bedtime reached';
+  }
+  const hours = Math.floor(remaining / 60);
+  const mins = remaining % 60;
+  if (hours === 0) {
+    return `${mins}m left today`;
+  }
+  return `${hours}h ${mins}m left today`;
+}

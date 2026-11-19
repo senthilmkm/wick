@@ -771,6 +771,7 @@ function WickRoot() {
       {activeTab === 'flame' && (
         <FlameScreen
           snapshot={snapshot}
+          settings={settings}
           theme={theme}
           waxLayers={waxLayers}
           resumeTick={resumeTick}
