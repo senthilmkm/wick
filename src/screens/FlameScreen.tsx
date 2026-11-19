@@ -1,5 +1,5 @@
 import { Canvas, LinearGradient, RoundedRect, Circle, vec } from '@shopify/react-native-skia';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Candle3DCanvas } from '../components/Candle3DCanvas';
 import { InfoModal } from '../components/InfoModal';
@@ -45,11 +45,33 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
   const [showActionsSheet, setShowActionsSheet] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [, setMinuteTick] = useState(0);
+  const lastStepsRef = useRef(snapshot.stepsToday);
+  const lastStepActivityAtRef = useRef(snapshot.updatedAt || Date.now());
+
+  useEffect(() => {
+    if (snapshot.stepsToday > lastStepsRef.current) {
+      lastStepActivityAtRef.current = Date.now();
+    }
+    lastStepsRef.current = snapshot.stepsToday;
+  }, [snapshot.stepsToday]);
 
   useEffect(() => {
     const timer = setInterval(() => setMinuteTick((t) => t + 1), 60000);
     return () => clearInterval(timer);
   }, []);
+
+  const stepsRemaining = Math.max(0, settings.dailyStepGoal - snapshot.stepsToday);
+  const goalMet = stepsRemaining === 0;
+  const goalRatio = Math.min(1, snapshot.stepsToday / Math.max(1, settings.dailyStepGoal));
+  const walkMins = Math.max(1, Math.round(stepsRemaining / 100));
+  const isSedentaryDraft =
+    !goalMet &&
+    snapshot.ignitedAt !== null &&
+    snapshot.state !== 'NIGHT_SLEEP' &&
+    snapshot.state !== 'GLASS_DOME' &&
+    snapshot.state !== 'SMOKING_GRACE' &&
+    snapshot.state !== 'EXTINGUISHED' &&
+    Date.now() - lastStepActivityAtRef.current >= 60 * 60 * 1000;
 
   const needsSpark =
     snapshot.state === 'FLICKERING' ||
@@ -80,7 +102,22 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
             Day {snapshot.streakDays} • {snapshot.stepsToday.toLocaleString('en-US')} /{' '}
             {settings.dailyStepGoal.toLocaleString('en-US')}
           </Text>
-          <Text style={styles.timeLeftSub}>{timeLeftLabel}</Text>
+          <View style={styles.goalBarTrack}>
+            <View
+              style={[
+                styles.goalBarFill,
+                {
+                  width: `${Math.round(goalRatio * 100)}%`,
+                  backgroundColor: goalMet ? '#FFF6D6' : theme.accent,
+                },
+              ]}
+            />
+          </View>
+          <Text style={styles.timeLeftSub}>
+            {goalMet
+              ? `Goal reached! • ${timeLeftLabel}`
+              : `${stepsRemaining.toLocaleString('en-US')} to go (~${walkMins}m walk) • ${timeLeftLabel}`}
+          </Text>
         </View>
         <View style={styles.topRightActions}>
           {needsSpark && (
@@ -117,6 +154,8 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
           windIntensity={windIntensity}
           tiltAngle={tiltAngle}
           lanternMode={settings.lanternModeEnabled}
+          goalMet={goalMet}
+          sedentaryDraft={isSedentaryDraft}
         />
       </Pressable>
 
@@ -185,12 +224,23 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
         </View>
       )}
 
+      {/* 1-Hour Sedentary Draft Nudge */}
+      {isSedentaryDraft && !statusMessage && !showPacePill && (
+        <View style={styles.pacePill}>
+          <Text style={[styles.paceText, { color: '#FF9F43' }]}>
+            Still for 1h — walk 100 steps to steady the flame
+          </Text>
+        </View>
+      )}
+
       {/* Subtle Tap-to-Peek Pace Pill (Zero Clutter) */}
       {showPacePill && (
         <View style={styles.pacePill}>
           <Text style={[styles.paceText, { color: theme.primaryText }]}>
             {snapshot.stepsToday.toLocaleString('en-US')} steps •{' '}
-            {Math.round(snapshot.paceRatio * 100)}% pace
+            {goalMet
+              ? 'Goal reached!'
+              : `${stepsRemaining.toLocaleString('en-US')} left (~${walkMins}m walk)`}
           </Text>
         </View>
       )}
@@ -253,7 +303,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerLeft: {
-    gap: 2,
+    gap: 4,
+  },
+  goalBarTrack: {
+    width: 120,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    overflow: 'hidden',
+  },
+  goalBarFill: {
+    height: 3,
+    borderRadius: 2,
   },
   streakBadge: {
     fontSize: 14,

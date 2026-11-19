@@ -34,6 +34,8 @@ interface Candle3DCanvasProps {
   windIntensity?: number;
   tiltAngle?: number;
   lanternMode?: boolean;
+  goalMet?: boolean;
+  sedentaryDraft?: boolean;
 }
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -81,6 +83,8 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
   windIntensity = 0,
   tiltAngle = 0,
   lanternMode = false,
+  goalMet = false,
+  sedentaryDraft = false,
 }) => {
   const breath = useSharedValue(1);
   const sway = useSharedValue(0);
@@ -114,7 +118,10 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
   }, [tiltAngle, gravityTilt]);
 
   useEffect(() => {
-    const anxious = snapshot.state === 'FLICKERING' || snapshot.state === 'DYING_EMBER';
+    const anxious =
+      snapshot.state === 'FLICKERING' ||
+      snapshot.state === 'DYING_EMBER' ||
+      sedentaryDraft;
     const breathMs = anxious ? 250 : 1250;
     const minBreath = anxious ? 0.8 : 0.94;
 
@@ -167,7 +174,7 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
     } else {
       smokeDrift.value = 0;
     }
-  }, [snapshot.state, resumeTick, breath, sway, bloom, sparkProgress, smokeDrift]);
+  }, [snapshot.state, resumeTick, sedentaryDraft, breath, sway, bloom, sparkProgress, smokeDrift]);
 
   const candleHeight = Math.round(235 - snapshot.meltProgress * 110);
   const candleW = 122;
@@ -304,8 +311,12 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
   const visibleLayers = waxLayers.slice(-14);
   const glowColor = isNight ? '#7CC6FE' : theme.ambientGlow;
   const outerColor = isNight ? '#38BDF8' : '#FF7A18';
-  const midTopColor = isNight ? '#E0F2FE' : '#FFFBE6';
-  const midBottomColor = isNight ? '#0284C7' : snapshot.flameColorHex;
+  const midTopColor = isNight ? '#E0F2FE' : goalMet ? '#FFFBE6' : '#FFE8A3';
+  const midBottomColor = isNight
+    ? '#0284C7'
+    : snapshot.state === 'BLAZING' && !goalMet
+      ? '#FF9E2C'
+      : snapshot.flameColorHex;
 
   return (
     <View
