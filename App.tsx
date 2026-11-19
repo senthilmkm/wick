@@ -199,6 +199,7 @@ function WickRoot() {
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stepsTodayRef = useRef(0);
   const manualBlowArmedUntilRef = useRef(0);
+  const goalCelebratedDateRef = useRef<string | null>(null);
 
   const [settings, setSettings] = useState<UserSettings>(() => storageService.loadSettings());
   const [waxLayers, setWaxLayers] = useState<WaxLayer[]>(() => storageService.loadWaxLayers());
@@ -280,12 +281,22 @@ function WickRoot() {
       setSnapshot((prev) => {
         const monotonicSteps =
           prev.dateKey === todayKey ? Math.max(prev.stepsToday, steps) : steps;
+        const activeGoal = settingsRef.current.dailyStepGoal;
         const res = evaluateCandleState({
           snapshot: prev,
           stepsToday: monotonicSteps,
           settings: settingsRef.current,
           now,
         });
+        const crossedGoalToday =
+          (prev.dateKey !== todayKey || prev.stepsToday < activeGoal) &&
+          res.snapshot.stepsToday >= activeGoal &&
+          goalCelebratedDateRef.current !== res.snapshot.dateKey;
+        if (crossedGoalToday) {
+          goalCelebratedDateRef.current = res.snapshot.dateKey;
+          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          showToast('Daily goal reached! Your wick is blazing.');
+        }
         void notifySmokingGraceIfNeeded(prev.state, res.snapshot.state);
         if (res.completedDayLayer) {
           const nextLayers = storageService.appendWaxLayer(res.completedDayLayer);
@@ -1003,6 +1014,7 @@ function WickRoot() {
     rescueBaselineStepsRef.current = null;
     hkBaselineStepsRef.current = 0;
     pedometerSessionOffsetRef.current = 0;
+    goalCelebratedDateRef.current = null;
     setSnapshot(freshSnapshot);
     storageService.saveSnapshot(freshSnapshot, now.getTime());
     reloadNativeWidgets();
@@ -1018,6 +1030,15 @@ function WickRoot() {
       settings,
       now: new Date(),
     });
+    if (
+      snapshot.stepsToday < settings.dailyStepGoal &&
+      res.snapshot.stepsToday >= settings.dailyStepGoal &&
+      goalCelebratedDateRef.current !== res.snapshot.dateKey
+    ) {
+      goalCelebratedDateRef.current = res.snapshot.dateKey;
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast('Daily goal reached! Your wick is blazing.');
+    }
     setSnapshot(res.snapshot);
     storageService.saveSnapshot(res.snapshot, Date.now());
     void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(res.snapshot));
