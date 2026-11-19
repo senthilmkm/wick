@@ -11,7 +11,7 @@ import {
   Skia,
   vec,
 } from '@shopify/react-native-skia';
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Dimensions, StyleSheet, View } from 'react-native';
 import {
   Easing,
@@ -95,6 +95,22 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
   const bloom = useSharedValue(1);
   const sparkProgress = useSharedValue(0);
   const smokeDrift = useSharedValue(0);
+  const prevStepsRef = useRef(snapshot.stepsToday);
+
+  useEffect(() => {
+    if (
+      snapshot.stepsToday > prevStepsRef.current &&
+      snapshot.state !== 'NIGHT_SLEEP' &&
+      snapshot.state !== 'UNLIT_MORNING' &&
+      snapshot.state !== 'SMOKING_GRACE' &&
+      snapshot.state !== 'EXTINGUISHED' &&
+      snapshot.state !== 'IGNITING'
+    ) {
+      sparkProgress.value = 0;
+      sparkProgress.value = withTiming(1, { duration: 680, easing: Easing.out(Easing.cubic) });
+    }
+    prevStepsRef.current = snapshot.stepsToday;
+  }, [snapshot.stepsToday, snapshot.state, sparkProgress]);
 
   useEffect(() => {
     windTilt.value = withSpring(windIntensity, { damping: 9, stiffness: 260 });
@@ -530,8 +546,8 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
           </Group>
         )}
 
-        {/* Flint Sparks on Ignition */}
-        {snapshot.state === 'IGNITING' &&
+        {/* Flint & Live Walking Embers */}
+        {(snapshot.state === 'IGNITING' || (intensity > 0 && !isNight)) &&
           SPARK_VECTORS.map((sp, i) => (
             <SkiaSpark key={i} progress={sparkProgress} cx={CX} baseY={flameBaseY} dx={sp.dx} dy={sp.dy} />
           ))}

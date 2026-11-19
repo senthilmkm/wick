@@ -1143,6 +1143,8 @@ function WickRoot() {
           layers={waxLayers}
           streakDays={snapshot.streakDays}
           waxGrams={snapshot.waxGrams}
+          todaySteps={snapshot.stepsToday}
+          dailyStepGoal={settings.dailyStepGoal}
           theme={theme}
           entitlement={{
             ...entitlement,
