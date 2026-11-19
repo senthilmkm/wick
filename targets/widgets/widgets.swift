@@ -17,19 +17,17 @@ struct WickEntry: TimelineEntry {
 
 struct WickProvider: TimelineProvider {
   private let appGroupId = "group.com.senthilmkm.wick"
+  private static let fallbackSnapshot = WickWidgetSnapshot(
+    state: "BLAZING",
+    flameIntensity: 0.9,
+    flameColorHex: "#FFF6D6",
+    stepsToday: 6420,
+    expectedStepsNow: 5800,
+    streakDays: 14
+  )
 
   func placeholder(in context: Context) -> WickEntry {
-    WickEntry(
-      date: Date(),
-      snapshot: WickWidgetSnapshot(
-        state: "BLAZING",
-        flameIntensity: 0.9,
-        flameColorHex: "#FFF6D6",
-        stepsToday: 6420,
-        expectedStepsNow: 5800,
-        streakDays: 14
-      )
-    )
+    WickEntry(date: Date(), snapshot: Self.fallbackSnapshot)
   }
 
   func getSnapshot(in context: Context, completion: @escaping (WickEntry) -> Void) {
@@ -47,7 +45,7 @@ struct WickProvider: TimelineProvider {
       let data = UserDefaults(suiteName: appGroupId)?.string(forKey: "wick.widget.snapshot")?.data(using: .utf8),
       let decoded = try? JSONDecoder().decode(WickWidgetSnapshot.self, from: data)
     else {
-      return placeholder(in: .init())
+      return WickEntry(date: Date(), snapshot: Self.fallbackSnapshot)
     }
     return WickEntry(date: Date(), snapshot: decoded)
   }
