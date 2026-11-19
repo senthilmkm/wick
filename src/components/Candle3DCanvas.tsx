@@ -192,8 +192,10 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
     }
   }, [snapshot.state, resumeTick, sedentaryDraft, breath, sway, bloom, sparkProgress, smokeDrift]);
 
-  const candleHeight = Math.round(235 - snapshot.meltProgress * 110);
-  const candleW = 122;
+  const streakScale = Math.min(1, Math.max(0, snapshot.streakDays) / 30);
+  const baseCandleH = Math.round(190 + streakScale * 65); // 190px (Day 0) -> 255px (Day 30+)
+  const candleHeight = Math.round(baseCandleH - snapshot.meltProgress * (baseCandleH * 0.45));
+  const candleW = Math.round(108 + streakScale * 24); // 108px (Day 0) -> 132px (Day 30+)
   const candleLeft = CX - candleW / 2;
   const candleBottom = CANVAS_H - 38;
   const candleTop = candleBottom - candleHeight;
