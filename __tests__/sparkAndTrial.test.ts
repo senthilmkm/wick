@@ -13,11 +13,15 @@ import {
   canExportPdf,
   canExportVideo,
   canOfferFreeTrial,
+  canUseGlassDome,
   canUseTheme,
   createInitialEntitlement,
   FREE_MAX_LEDGER_DAYS,
   getVisibleLedgerLimit,
+  hasProAccess,
+  isInReverseTrial,
   recordVideoExport,
+  REVERSE_TRIAL_MS,
 } from '../src/engine/trialGuard';
 
 describe('sparkEngine', () => {
@@ -85,19 +89,29 @@ describe('trialGuard & anti-reinstall protection', () => {
   it('enforces Free vs Wick Pro entitlements and weekly video export quotas', () => {
     const freeEnt = createInitialEntitlement(day1, false, true, null, false);
     expect(freeEnt.isEligibleForIntroTrial).toBe(true);
+    // Within 3-day reverse trial: all Pro features unlocked
+    expect(isInReverseTrial(freeEnt, day1.getTime() + 1000)).toBe(true);
+    expect(hasProAccess(freeEnt, day1.getTime() + 1000)).toBe(true);
+    expect(canUseTheme(freeEnt, 'midnight_hearth', day1.getTime() + 1000)).toBe(true);
+    expect(canUseGlassDome(freeEnt, day1.getTime() + 1000)).toBe(true);
+
+    // After 3 days (72h+): gated behind Wick Pro
     expect(canUseTheme(freeEnt, 'obsidian_night')).toBe(true);
     expect(canUseTheme(freeEnt, 'midnight_hearth')).toBe(false);
+    expect(canUseGlassDome(freeEnt)).toBe(false);
     expect(canAddFriend(freeEnt, 0)).toBe(true);
     expect(canAddFriend(freeEnt, 1)).toBe(false);
     expect(canExportPdf(freeEnt)).toBe(false);
     expect(getVisibleLedgerLimit(freeEnt)).toBe(FREE_MAX_LEDGER_DAYS);
 
-    expect(canExportVideo(freeEnt, day1)).toBe(true);
-    const afterExport = recordVideoExport(freeEnt, day1);
-    expect(canExportVideo(afterExport, day1)).toBe(false);
+    const afterDay3 = new Date(day1.getTime() + REVERSE_TRIAL_MS + 1000);
+    const nextWeekAfterDay3 = new Date(afterDay3.getTime() + 8 * 24 * 60 * 60 * 1000);
+    expect(canExportVideo(freeEnt, afterDay3)).toBe(true);
+    const afterExport = recordVideoExport(freeEnt, afterDay3);
+    expect(canExportVideo(afterExport, afterDay3)).toBe(false);
     // Resets in new week
-    expect(canExportVideo(afterExport, nextWeek)).toBe(true);
-    const newWeekExport = recordVideoExport(afterExport, nextWeek);
+    expect(canExportVideo(afterExport, nextWeekAfterDay3)).toBe(true);
+    const newWeekExport = recordVideoExport(afterExport, nextWeekAfterDay3);
     expect(newWeekExport.freeVideoExportsThisWeek).toBe(1);
 
     const proEnt = createInitialEntitlement(day1, true, false, 1000, true);

@@ -12,6 +12,14 @@ import {
   parseSparkLink,
 } from '../src/engine/sparkEngine';
 import {
+  canAddFriend,
+  canExportPdf,
+  canUseGlassDome,
+  canUseTheme,
+  createInitialEntitlement,
+  REVERSE_TRIAL_MS,
+} from '../src/engine/trialGuard';
+import {
   BLOW_DECIBEL_THRESHOLD,
   BREEZE_MIN_DECIBEL,
   computeWindShakeIntensity,
@@ -93,5 +101,29 @@ describe('Wick enhancements & bug-fix regression suite', () => {
     expect(DEFAULT_SETTINGS.lanternModeEnabled).toBe(false);
     expect(computeWindShakeIntensity(BREEZE_MIN_DECIBEL)).toBe(0);
     expect(computeWindShakeIntensity(BLOW_DECIBEL_THRESHOLD)).toBe(1);
+  });
+
+  it('enforces 3-day reverse trial using Keychain firstInstallAt across reinstalls', () => {
+    const installDate = new Date(2026, 10, 15, 9, 0);
+    // Simulated reinstall on Day 2 (Keychain preserves installDate)
+    const ent = createInitialEntitlement(
+      new Date(2026, 10, 16, 12, 0),
+      false,
+      true,
+      installDate.getTime(),
+      false
+    );
+    const day2Ms = installDate.getTime() + 24 * 60 * 60 * 1000;
+    expect(canUseTheme(ent, 'lunar_slate', day2Ms)).toBe(true);
+    expect(canUseGlassDome(ent, day2Ms)).toBe(true);
+    expect(canAddFriend(ent, 2, day2Ms)).toBe(true);
+    expect(canExportPdf(ent, day2Ms)).toBe(true);
+
+    // Day 4 (after 72h): Pro gates lock even after reinstall
+    const day4Ms = installDate.getTime() + REVERSE_TRIAL_MS + 1000;
+    expect(canUseTheme(ent, 'lunar_slate', day4Ms)).toBe(false);
+    expect(canUseGlassDome(ent, day4Ms)).toBe(false);
+    expect(canAddFriend(ent, 1, day4Ms)).toBe(false);
+    expect(canExportPdf(ent, day4Ms)).toBe(false);
   });
 });

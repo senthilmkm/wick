@@ -31,7 +31,9 @@ import {
   canExportPdf,
   canExportVideo,
   canOfferFreeTrial,
+  canUseGlassDome,
   canUseTheme,
+  hasProAccess,
   recordVideoExport,
 } from './src/engine/trialGuard';
 import { CircleScreen } from './src/screens/CircleScreen';
@@ -335,6 +337,16 @@ function WickRoot() {
         freeVideoExportsThisWeek: quota.count,
         weekKey: quota.weekKey,
       }));
+      if (!isProUser && now.getTime() - firstInstall >= 3 * 24 * 60 * 60 * 1000) {
+        setSettings((prevSettings) => {
+          if (prevSettings.themeId === 'obsidian_night') {
+            return prevSettings;
+          }
+          const reverted = { ...prevSettings, themeId: 'obsidian_night' as ThemeId };
+          storageService.saveSettings(reverted);
+          return reverted;
+        });
+      }
       setHydrated(true);
     })();
     return () => {
@@ -711,7 +723,7 @@ function WickRoot() {
   };
 
   const handleInviteFriend = async () => {
-    if (!canAddFriend(entitlement, friends.length)) {
+    if (!canAddFriend(entitlement, friends.length, Date.now())) {
       setPaywallReason('friend');
       return;
     }
@@ -752,7 +764,7 @@ function WickRoot() {
   };
 
   const handleExportPdf = async () => {
-    if (!canExportPdf(entitlement)) {
+    if (!canExportPdf(entitlement, Date.now())) {
       setPaywallReason('pdf');
       return;
     }
@@ -838,6 +850,10 @@ function WickRoot() {
             void handleSendSpark();
           }}
           onActivateGlassDome={() => {
+            if (!canUseGlassDome(entitlement, Date.now())) {
+              setPaywallReason('dome');
+              return;
+            }
             const res = activateGlassDome(snapshot, Date.now());
             if (res.activated) {
               setSnapshot(res.snapshot);
@@ -867,7 +883,10 @@ function WickRoot() {
           streakDays={snapshot.streakDays}
           waxGrams={snapshot.waxGrams}
           theme={theme}
-          entitlement={entitlement}
+          entitlement={{
+            ...entitlement,
+            isPro: hasProAccess(entitlement, Date.now()),
+          }}
           onExportPdf={() => {
             void handleExportPdf();
           }}
@@ -893,10 +912,13 @@ function WickRoot() {
         <SanctuaryScreen
           settings={settings}
           theme={theme}
-          entitlement={entitlement}
+          entitlement={{
+            ...entitlement,
+            isPro: hasProAccess(entitlement, Date.now()),
+          }}
           glassDomesOwned={snapshot.glassDomesOwned}
           onSelectTheme={(themeId: ThemeId) => {
-            if (!canUseTheme(entitlement, themeId)) {
+            if (!canUseTheme(entitlement, themeId, Date.now())) {
               setPaywallReason('theme');
               return;
             }

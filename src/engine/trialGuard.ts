@@ -5,6 +5,7 @@ import { getLocalWeekKey } from './candleMath';
 export const FREE_MAX_FRIENDS = 1;
 export const FREE_MAX_LEDGER_DAYS = 7;
 export const FREE_WEEKLY_VIDEO_EXPORTS = 1;
+export const REVERSE_TRIAL_MS = 3 * 24 * 60 * 60 * 1000; // 72 hours from Keychain firstInstallAt
 
 /**
  * Resolves intro trial eligibility combining StoreKit 2 Apple ID status
@@ -18,8 +19,6 @@ export function canOfferFreeTrial(
   if (!storeKitEligible || cloudKitStarterClaimed) {
     return false;
   }
-  // If Keychain already recorded an earlier install, deny local-only intro perks
-  // while deferring final StoreKit intro-offer billing to Apple's receipt check.
   if (keychainFirstInstallAt !== null) {
     return false;
   }
@@ -48,22 +47,52 @@ export function createInitialEntitlement(
   };
 }
 
-export function canUseTheme(entitlement: EntitlementState, themeId: ThemeId): boolean {
-  if (entitlement.isPro) {
+/**
+ * Returns true during the first 72 hours from Keychain-persisted firstInstallAt
+ * (survives app uninstall & reinstall).
+ */
+export function isInReverseTrial(entitlement: EntitlementState, nowMs: number): boolean {
+  return nowMs - entitlement.firstInstallAt < REVERSE_TRIAL_MS;
+}
+
+/**
+ * Effective Pro access: paid subscriber OR within the 3-day reverse trial.
+ */
+export function hasProAccess(entitlement: EntitlementState, nowMs: number): boolean {
+  return entitlement.isPro || isInReverseTrial(entitlement, nowMs);
+}
+
+export function canUseTheme(
+  entitlement: EntitlementState,
+  themeId: ThemeId,
+  nowMs: number = entitlement.firstInstallAt + REVERSE_TRIAL_MS
+): boolean {
+  if (hasProAccess(entitlement, nowMs)) {
     return true;
   }
   return !WICK_THEMES[themeId].isPro;
 }
 
-export function canAddFriend(entitlement: EntitlementState, currentFriendCount: number): boolean {
-  if (entitlement.isPro) {
+export function canUseGlassDome(
+  entitlement: EntitlementState,
+  nowMs: number = entitlement.firstInstallAt + REVERSE_TRIAL_MS
+): boolean {
+  return hasProAccess(entitlement, nowMs);
+}
+
+export function canAddFriend(
+  entitlement: EntitlementState,
+  currentFriendCount: number,
+  nowMs: number = entitlement.firstInstallAt + REVERSE_TRIAL_MS
+): boolean {
+  if (hasProAccess(entitlement, nowMs)) {
     return true;
   }
   return currentFriendCount < FREE_MAX_FRIENDS;
 }
 
 export function canExportVideo(entitlement: EntitlementState, now: Date): boolean {
-  if (entitlement.isPro) {
+  if (hasProAccess(entitlement, now.getTime())) {
     return true;
   }
   const currentWeek = getLocalWeekKey(now);
@@ -83,10 +112,16 @@ export function recordVideoExport(entitlement: EntitlementState, now: Date): Ent
   };
 }
 
-export function canExportPdf(entitlement: EntitlementState): boolean {
-  return entitlement.isPro;
+export function canExportPdf(
+  entitlement: EntitlementState,
+  nowMs: number = entitlement.firstInstallAt + REVERSE_TRIAL_MS
+): boolean {
+  return hasProAccess(entitlement, nowMs);
 }
 
-export function getVisibleLedgerLimit(entitlement: EntitlementState): number {
-  return entitlement.isPro ? Number.MAX_SAFE_INTEGER : FREE_MAX_LEDGER_DAYS;
+export function getVisibleLedgerLimit(
+  entitlement: EntitlementState,
+  nowMs: number = entitlement.firstInstallAt + REVERSE_TRIAL_MS
+): number {
+  return hasProAccess(entitlement, nowMs) ? Number.MAX_SAFE_INTEGER : FREE_MAX_LEDGER_DAYS;
 }

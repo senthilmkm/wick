@@ -2,7 +2,7 @@ import React from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { EntitlementState } from '../types/wick';
 
-export type PaywallReason = 'theme' | 'friend' | 'video' | 'pdf' | 'ledger' | 'general';
+export type PaywallReason = 'theme' | 'friend' | 'video' | 'pdf' | 'ledger' | 'dome' | 'general';
 
 interface PaywallModalProps {
   visible: boolean;
@@ -19,6 +19,7 @@ const REASON_TITLES: Record<PaywallReason, string> = {
   video: 'Weekly Free Export Used',
   pdf: 'Unlock PDF Wax Ledger Reports',
   ledger: 'Unlock Full Day 100+ Wax History',
+  dome: 'Unlock Glass Domes (24h Pause)',
   general: 'Keep Your Wick Burning Brighter',
 };
 
