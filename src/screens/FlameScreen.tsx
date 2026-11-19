@@ -2,6 +2,7 @@ import { Canvas, LinearGradient, RoundedRect, Circle, vec } from '@shopify/react
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Candle3DCanvas } from '../components/Candle3DCanvas';
+import { InfoModal } from '../components/InfoModal';
 import { CandleSnapshot, WaxLayer, WickTheme } from '../types/wick';
 
 interface FlameScreenProps {
@@ -33,6 +34,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
 }) => {
   const [showPacePill, setShowPacePill] = useState(false);
   const [showActionsSheet, setShowActionsSheet] = useState(false);
+  const [showInfoModal, setShowInfoModal] = useState(false);
 
   const needsSpark =
     snapshot.state === 'FLICKERING' ||
@@ -60,6 +62,15 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
           )}
           <Pressable style={styles.iconBtn} onPress={onShareVideo}>
             <Text style={[styles.iconBtnText, { color: theme.primaryText }]}>Share</Text>
+          </Pressable>
+          <Pressable
+            style={styles.infoCircleBtn}
+            onPress={() => setShowInfoModal(true)}
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel="How Wick works and feature guide"
+          >
+            <Text style={[styles.infoCircleText, { color: theme.primaryText }]}>i</Text>
           </Pressable>
         </View>
       </View>
@@ -183,6 +194,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
           </Pressable>
         </View>
       )}
+      <InfoModal visible={showInfoModal} onClose={() => setShowInfoModal(false)} />
     </View>
   );
 };
@@ -227,6 +239,19 @@ const styles = StyleSheet.create({
   iconBtnText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  infoCircleBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoCircleText: {
+    fontSize: 14,
+    fontWeight: '700',
+    fontStyle: 'italic',
   },
   candleTouchZone: {
     flex: 1,
