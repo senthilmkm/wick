@@ -650,7 +650,8 @@ function WickRoot() {
       activeTab !== 'flame' ||
       !settings.liveBreezeEnabled ||
       snapshot.flameIntensity <= 0 ||
-      snapshot.state === 'GLASS_DOME'
+      snapshot.state === 'GLASS_DOME' ||
+      snapshot.state === 'NIGHT_SLEEP'
     ) {
       setWindIntensity(0);
       return;
@@ -724,12 +725,14 @@ function WickRoot() {
               setWindIntensity(0);
               void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               setSnapshot((prev) => {
+                if (prev.state !== 'NIGHT_SLEEP' && !prev.mood) {
+                  setShowMoodModal(true);
+                }
                 const next = triggerNightBlowOut(prev, Date.now());
                 storageService.saveSnapshot(next, Date.now());
                 void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(next));
                 return next;
               });
-              setShowMoodModal(true);
               showToast('Goodnight. Wax is cooling.');
             });
           }
@@ -857,12 +860,14 @@ function WickRoot() {
     const completeBlowOut = () => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setSnapshot((prev) => {
+        if (prev.state !== 'NIGHT_SLEEP' && !prev.mood) {
+          setShowMoodModal(true);
+        }
         const next = triggerNightBlowOut(prev, Date.now());
         storageService.saveSnapshot(next, Date.now());
         void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(next));
         return next;
       });
-      setShowMoodModal(true);
       showToast('Goodnight. Wax is cooling.');
     };
 
