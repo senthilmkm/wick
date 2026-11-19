@@ -69,7 +69,7 @@ public class WickNativeModule: Module {
             root["state"] = "BLAZING" as CKRecordValue
             root["flameIntensity"] = 0.9 as CKRecordValue
             root["streakDays"] = 1 as CKRecordValue
-            root["updatedAt"] = Date().timeIntervalSince1970 * 1000 as CKRecordValue
+            root["updatedAt"] = NSNumber(value: Date().timeIntervalSince1970 * 1000)
           }
           let share = CKShare(rootRecord: root)
           share[CKShare.SystemFieldKey.title] = "Wick Candle" as CKRecordValue
@@ -156,7 +156,9 @@ public class WickNativeModule: Module {
           }
         }
         group.notify(queue: .main) {
-          promise.resolve(results)
+          self.resultsQueue.sync {
+            promise.resolve(results)
+          }
         }
       }
     }
