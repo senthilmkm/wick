@@ -114,6 +114,7 @@ const kvSet = (key: string, val: string): void => {
 const KEY_ONBOARDED = 'wick.onboarded.v1';
 const KEY_PRO_CACHE = 'wick.pro_cached.v1';
 const KEY_FRIENDS = 'wick.friends.v1';
+const KEY_REMOVED_FRIENDS = 'wick.removed_friends.v1';
 const SECURE_ONBOARDED = 'wick_onboarded_v1';
 const SECURE_SETTINGS = 'wick_settings_v1';
 const SECURE_SNAPSHOT = 'wick_snapshot_v1';
@@ -775,12 +776,40 @@ function WickRoot() {
       .refreshFriendCandles()
       .then((remoteFriends) => {
         if (remoteFriends.length > 0) {
-          setFriends(remoteFriends);
-          kvSet(KEY_FRIENDS, JSON.stringify(remoteFriends));
+          let removedSet = new Set<string>();
+          try {
+            const rawRemoved = kvGet(KEY_REMOVED_FRIENDS);
+            if (rawRemoved) {
+              removedSet = new Set(JSON.parse(rawRemoved) as string[]);
+            }
+          } catch {
+            // ignore corrupt removed list
+          }
+          const filtered = remoteFriends.filter((f) => !removedSet.has(f.id));
+          setFriends(filtered);
+          kvSet(KEY_FRIENDS, JSON.stringify(filtered));
         }
       })
       .catch(() => {});
   }, [activeTab, onboarded]);
+
+  const handleRemoveFriend = (friendId: string) => {
+    setFriends((prev) => {
+      const next = prev.filter((f) => f.id !== friendId);
+      kvSet(KEY_FRIENDS, JSON.stringify(next));
+      return next;
+    });
+    try {
+      const raw = kvGet(KEY_REMOVED_FRIENDS);
+      const existing = raw ? (JSON.parse(raw) as string[]) : [];
+      if (!existing.includes(friendId)) {
+        kvSet(KEY_REMOVED_FRIENDS, JSON.stringify([...existing, friendId]));
+      }
+    } catch {
+      kvSet(KEY_REMOVED_FRIENDS, JSON.stringify([friendId]));
+    }
+    showToast('Friend removed from Circle.');
+  };
 
   const handleUpdateSettings = (partial: Partial<UserSettings>) => {
     setSettings((prev) => {
@@ -1137,6 +1166,7 @@ function WickRoot() {
           onSendSpark={() => {
             void handleSendSpark();
           }}
+          onRemoveFriend={handleRemoveFriend}
         />
       )}
 

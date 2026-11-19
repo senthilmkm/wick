@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { ActiveSparkRescue, FriendCandle, WickTheme } from '../types/wick';
 
 const PAIR_STEPS = [
@@ -31,6 +32,7 @@ interface CircleScreenProps {
   theme: WickTheme;
   onInviteFriend: () => void;
   onSendSpark: () => void;
+  onRemoveFriend?: (friendId: string) => void;
 }
 
 export const CircleScreen: React.FC<CircleScreenProps> = ({
@@ -39,6 +41,7 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
   theme,
   onInviteFriend,
   onSendSpark,
+  onRemoveFriend,
 }) => {
   const [infoVisible, setInfoVisible] = useState(false);
 
@@ -85,21 +88,55 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
           </Text>
         </View>
       ) : (
-        friends.map((friend) => (
-          <View key={friend.id} style={styles.friendRow}>
-            <View>
-              <Text style={[styles.friendName, { color: theme.primaryText }]}>
-                {friend.displayName}
-              </Text>
-              <Text style={styles.friendMeta}>
-                {friend.state.toLowerCase().replace('_', ' ')} • {friend.streakDays}d streak
-              </Text>
+        friends.map((friend) => {
+          const confirmRemove = () => {
+            if (!onRemoveFriend) {
+              return;
+            }
+            Alert.alert(
+              'Remove Friend?',
+              `Remove ${friend.displayName} from your Circle?`,
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: () => onRemoveFriend(friend.id) },
+              ]
+            );
+          };
+
+          const row = (
+            <View style={styles.friendRow}>
+              <View>
+                <Text style={[styles.friendName, { color: theme.primaryText }]}>
+                  {friend.displayName}
+                </Text>
+                <Text style={styles.friendMeta}>
+                  {friend.state.toLowerCase().replace('_', ' ')} • {friend.streakDays}d streak
+                </Text>
+              </View>
+              <Pressable style={styles.sparkSmallBtn} onPress={onSendSpark}>
+                <Text style={styles.sparkSmallText}>Spark</Text>
+              </Pressable>
             </View>
-            <Pressable style={styles.sparkSmallBtn} onPress={onSendSpark}>
-              <Text style={styles.sparkSmallText}>Spark</Text>
-            </Pressable>
-          </View>
-        ))
+          );
+
+          if (!onRemoveFriend) {
+            return <View key={friend.id}>{row}</View>;
+          }
+
+          return (
+            <Swipeable
+              key={friend.id}
+              overshootRight={false}
+              renderRightActions={() => (
+                <Pressable style={styles.deleteAction} onPress={confirmRemove}>
+                  <Text style={styles.deleteActionText}>Delete</Text>
+                </Pressable>
+              )}
+            >
+              {row}
+            </Swipeable>
+          );
+        })
       )}
 
       <Modal
@@ -188,6 +225,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   sparkSmallText: { color: '#FF9F43', fontWeight: '600', fontSize: 13 },
+  deleteAction: {
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    borderRadius: 14,
+    marginLeft: 8,
+  },
+  deleteActionText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.72)',
