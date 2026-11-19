@@ -14,6 +14,7 @@ export interface WickNativeSpec {
     updatedAt: number
   ): Promise<boolean>;
   createFriendShareUrl(): Promise<string>;
+  acceptFriendShareUrl(shareUrl: string): Promise<boolean>;
   fetchSharedFriendCandles(): Promise<FriendCandle[]>;
 }
 
@@ -38,6 +39,18 @@ export function reloadNativeWidgets(): void {
     getNativeModule()?.reloadWidgets();
   } catch {
     // Graceful no-op
+  }
+}
+
+export async function acceptNativeFriendShareUrl(shareUrl: string): Promise<boolean> {
+  const mod = getNativeModule();
+  if (!mod) {
+    return false;
+  }
+  try {
+    return await mod.acceptFriendShareUrl(shareUrl);
+  } catch {
+    return false;
   }
 }
 

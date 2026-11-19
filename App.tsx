@@ -55,6 +55,7 @@ import {
 } from './src/services/lanternService';
 import { buildWaxLedgerPdfHtml } from './src/services/exportService';
 import {
+  acceptNativeFriendShareUrl,
   createNativeCloudKitDriver,
   reloadNativeWidgets,
   writeNativeWidgetSnapshot,
@@ -189,6 +190,7 @@ function WickRoot() {
   const [resumeTick, setResumeTick] = useState(0);
   const [windIntensity, setWindIntensity] = useState(0);
   const [tiltAngle, setTiltAngle] = useState(0);
+  const [isAppActive, setIsAppActive] = useState(true);
   const previousBrightnessRef = useRef<number | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -236,6 +238,14 @@ function WickRoot() {
       clearTimeout(toastTimerRef.current);
     }
     toastTimerRef.current = setTimeout(() => setStatusMessage(null), 3200);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+      }
+    };
   }, []);
 
   const applyStepTotal = useCallback(
@@ -375,6 +385,21 @@ function WickRoot() {
       if (!url) {
         return;
       }
+      if (url.includes('icloud.com/share')) {
+        void acceptNativeFriendShareUrl(url).then((accepted) => {
+          if (accepted) {
+            void cloudKitService.refreshFriendCandles().then((remoteFriends) => {
+              if (remoteFriends.length > 0) {
+                setFriends(remoteFriends);
+                kvSet(KEY_FRIENDS, JSON.stringify(remoteFriends));
+              }
+            });
+            setActiveTab('circle');
+            showToast('Friend paired via iCloud!');
+          }
+        });
+        return;
+      }
       if (url.includes('circle/pair') || url.includes('pair.html')) {
         const idMatch = /[?&]id=([^&]+)/.exec(url);
         const nameMatch = /[?&]name=([^&]+)/.exec(url);
@@ -453,7 +478,9 @@ function WickRoot() {
     });
 
     const appSub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') {
+      const activeNow = state === 'active';
+      setIsAppActive(activeNow);
+      if (activeNow) {
         setResumeTick((t) => t + 1);
         void syncHealthKit();
         void cloudKitService
@@ -482,9 +509,9 @@ function WickRoot() {
     };
   }, [onboarded, syncHealthKit, applyStepTotal]);
 
-  // iPhone tilt gravity sway while Flame screen is open and candle is lit
+  // iPhone tilt gravity sway while Flame screen is open and active
   useEffect(() => {
-    if (!hydrated || !onboarded || activeTab !== 'flame' || snapshot.flameIntensity <= 0) {
+    if (!hydrated || !onboarded || !isAppActive || activeTab !== 'flame' || snapshot.flameIntensity <= 0) {
       setTiltAngle(0);
       return;
     }
@@ -508,13 +535,14 @@ function WickRoot() {
         unsubTilt();
       }
     };
-  }, [hydrated, onboarded, activeTab, snapshot.flameIntensity > 0]);
+  }, [hydrated, onboarded, isAppActive, activeTab, snapshot.flameIntensity > 0]);
 
-  // Lantern Mode: boost screen brightness to 100% on Flame tab when lit, restore on exit
+  // Lantern Mode: boost screen brightness to 100% on Flame tab when lit & active, restore on exit
   useEffect(() => {
     const active =
       hydrated &&
       onboarded &&
+      isAppActive &&
       activeTab === 'flame' &&
       settings.lanternModeEnabled &&
       snapshot.flameIntensity > 0;
@@ -543,13 +571,14 @@ function WickRoot() {
         void restoreLanternBrightness(prev);
       }
     };
-  }, [hydrated, onboarded, activeTab, settings.lanternModeEnabled, snapshot.flameIntensity > 0]);
+  }, [hydrated, onboarded, isAppActive, activeTab, settings.lanternModeEnabled, snapshot.flameIntensity > 0]);
 
-  // Live breeze-shake on blow when Flame screen is open and enabled in Sanctuary
+  // Live breeze-shake on blow when Flame screen is open, active, and enabled in Sanctuary
   useEffect(() => {
     if (
       !hydrated ||
       !onboarded ||
+      !isAppActive ||
       activeTab !== 'flame' ||
       !settings.liveBreezeEnabled ||
       snapshot.flameIntensity <= 0 ||
@@ -643,6 +672,7 @@ function WickRoot() {
   }, [
     hydrated,
     onboarded,
+    isAppActive,
     activeTab,
     settings.liveBreezeEnabled,
     settings.micBlowOutEnabled,
