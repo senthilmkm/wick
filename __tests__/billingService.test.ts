@@ -17,6 +17,7 @@ jest.mock('react-native-purchases', () => ({
 
 import {
   checkProEntitlement,
+  fetchProPriceLabel,
   initBilling,
   purchaseProPackage,
   restoreProPurchases,
@@ -78,5 +79,17 @@ describe('billingService', () => {
     expect(await restoreProPurchases('key')).toBe(true);
     mockRestorePurchases.mockRejectedValueOnce(new Error('err'));
     expect(await restoreProPurchases('key')).toBe(false);
+  });
+
+  it('fetches localized StoreKit price string dynamically without hardcoding', async () => {
+    expect(await fetchProPriceLabel(undefined)).toBeNull();
+    mockGetOfferings.mockResolvedValueOnce({
+      current: { availablePackages: [{ product: { priceString: '$14.99' } }] },
+    });
+    expect(await fetchProPriceLabel('key')).toBe('$14.99');
+    mockGetOfferings.mockResolvedValueOnce({ current: { availablePackages: [] } });
+    expect(await fetchProPriceLabel('key')).toBeNull();
+    mockGetOfferings.mockRejectedValueOnce(new Error('offline'));
+    expect(await fetchProPriceLabel('key')).toBeNull();
   });
 });

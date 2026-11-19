@@ -10,6 +10,7 @@ interface SanctuaryScreenProps {
   entitlement: EntitlementState;
   isPaidPro?: boolean;
   isReverseTrialActive?: boolean;
+  priceLabel?: string | null;
   glassDomesOwned: number;
   onSelectTheme: (themeId: ThemeId) => void;
   onUpdateSettings: (partial: Partial<UserSettings>) => void;
@@ -24,6 +25,7 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
   entitlement,
   isPaidPro = entitlement.isPro,
   isReverseTrialActive = false,
+  priceLabel,
   glassDomesOwned,
   onSelectTheme,
   onUpdateSettings,
@@ -216,7 +218,9 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
             <Text style={styles.proBtnText}>
               {entitlement.isEligibleForIntroTrial
                 ? 'Start 7-Day Free Trial'
-                : 'Upgrade to Wick Pro ($14.99/yr)'}
+                : priceLabel
+                  ? `Upgrade to Wick Pro (${priceLabel})`
+                  : 'Upgrade to Wick Pro'}
             </Text>
           </Pressable>
         )}

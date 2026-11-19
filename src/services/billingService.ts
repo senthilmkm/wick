@@ -26,6 +26,19 @@ export async function checkProEntitlement(apiKey?: string): Promise<boolean> {
   }
 }
 
+export async function fetchProPriceLabel(apiKey?: string): Promise<string | null> {
+  if (!apiKey) {
+    return null;
+  }
+  try {
+    const offerings = await Purchases.getOfferings();
+    const price = offerings.current?.availablePackages[0]?.product?.priceString;
+    return typeof price === 'string' && price.length > 0 ? price : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function purchaseProPackage(apiKey?: string): Promise<{
   purchased: boolean;
   sandboxFallback: boolean;

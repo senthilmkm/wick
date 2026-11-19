@@ -45,6 +45,7 @@ import { WaxLedgerScreen } from './src/screens/WaxLedgerScreen';
 import { AudioBlowDetector, computeWindShakeIntensity } from './src/services/audioBlowService';
 import {
   checkProEntitlement,
+  fetchProPriceLabel,
   initBilling,
   purchaseProPackage,
   restoreProPurchases,
@@ -191,6 +192,7 @@ function WickRoot() {
   const [resumeTick, setResumeTick] = useState(0);
   const [windIntensity, setWindIntensity] = useState(0);
   const [tiltAngle, setTiltAngle] = useState(0);
+  const [proPriceLabel, setProPriceLabel] = useState<string | null>(null);
   const [isAppActive, setIsAppActive] = useState(true);
   const previousBrightnessRef = useRef<number | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -318,6 +320,7 @@ function WickRoot() {
         domeClaimed,
         quota,
         remotePro,
+        dynamicPrice,
         secOnboarded,
         secSettings,
         secSnapshot,
@@ -327,6 +330,7 @@ function WickRoot() {
         storageService.isStarterDomeClaimed(),
         storageService.loadVideoExportQuota(weekKey),
         checkProEntitlement(REVENUECAT_IOS_KEY),
+        fetchProPriceLabel(REVENUECAT_IOS_KEY),
         SecureStore.getItemAsync(SECURE_ONBOARDED).catch(() => null),
         SecureStore.getItemAsync(SECURE_SETTINGS).catch(() => null),
         SecureStore.getItemAsync(SECURE_SNAPSHOT).catch(() => null),
@@ -334,6 +338,9 @@ function WickRoot() {
       ]);
       if (!mounted) {
         return;
+      }
+      if (dynamicPrice) {
+        setProPriceLabel(dynamicPrice);
       }
       if (secOnboarded === '1') {
         kvSet(KEY_ONBOARDED, '1');
@@ -1029,6 +1036,7 @@ function WickRoot() {
           }}
           isPaidPro={entitlement.isPro}
           isReverseTrialActive={isInReverseTrial(entitlement, Date.now())}
+          priceLabel={proPriceLabel}
           glassDomesOwned={snapshot.glassDomesOwned}
           onSelectTheme={(themeId: ThemeId) => {
             if (!canUseTheme(entitlement, themeId, Date.now())) {
@@ -1066,6 +1074,7 @@ function WickRoot() {
         visible={paywallReason !== null}
         reason={paywallReason ?? 'general'}
         entitlement={entitlement}
+        priceLabel={proPriceLabel}
         onStartPro={() => {
           void purchaseProPackage(REVENUECAT_IOS_KEY).then(({ purchased }) => {
             if (purchased) {

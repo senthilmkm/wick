@@ -8,6 +8,7 @@ interface PaywallModalProps {
   visible: boolean;
   reason: PaywallReason;
   entitlement: EntitlementState;
+  priceLabel?: string | null;
   onStartPro: () => void;
   onRestorePurchases: () => void;
   onClose: () => void;
@@ -27,10 +28,16 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
   visible,
   reason,
   entitlement,
+  priceLabel,
   onStartPro,
   onRestorePurchases,
   onClose,
 }) => {
+  const trialText = priceLabel
+    ? `Start 7-Day Free Trial • Then ${priceLabel}`
+    : 'Start 7-Day Free Trial';
+  const subText = priceLabel ? `Subscribe to Wick Pro • ${priceLabel}` : 'Subscribe to Wick Pro';
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.backdrop}>
@@ -45,9 +52,7 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
 
           <Pressable style={styles.primaryBtn} onPress={onStartPro}>
             <Text style={styles.primaryText}>
-              {entitlement.isEligibleForIntroTrial
-                ? 'Start 7-Day Free Trial • Then $14.99/yr'
-                : 'Subscribe to Wick Pro • $14.99/yr'}
+              {entitlement.isEligibleForIntroTrial ? trialText : subText}
             </Text>
           </Pressable>
 
