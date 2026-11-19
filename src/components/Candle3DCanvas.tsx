@@ -184,36 +184,41 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
     return p;
   }, [wickBaseY]);
 
-  // Dynamic melting wax drips that grow longer as meltProgress increases
-  const dripLeftLen = Math.round(24 + snapshot.meltProgress * 58);
-  const dripRightLen = Math.round(16 + snapshot.meltProgress * 42);
+  // Dynamic 3D melting wax drips hugging the outer left & right sides + front
+  const activeMelt = Math.max(snapshot.meltProgress, intensity > 0 ? 0.14 : 0);
+  const dripLeftLen = Math.round(28 + activeMelt * 76);
+  const dripRightLen = Math.round(22 + activeMelt * 62);
+  const dripFrontLen = Math.round(18 + activeMelt * 48);
+
   const dripLeftPath = useMemo(() => {
     const p = Skia.Path.Make();
-    p.moveTo(candleLeft + 20, candleTop + 8);
-    p.quadTo(candleLeft + 15, candleTop + dripLeftLen * 0.7, candleLeft + 22, candleTop + dripLeftLen);
-    p.quadTo(candleLeft + 29, candleTop + dripLeftLen * 0.7, candleLeft + 26, candleTop + 8);
+    const x = candleLeft - 2;
+    p.moveTo(x + 2, candleTop + 6);
+    p.cubicTo(x - 4, candleTop + dripLeftLen * 0.45, x - 3, candleTop + dripLeftLen - 8, x + 3, candleTop + dripLeftLen);
+    p.cubicTo(x + 9, candleTop + dripLeftLen - 6, x + 8, candleTop + dripLeftLen * 0.4, x + 8, candleTop + 6);
     p.close();
     return p;
   }, [candleLeft, candleTop, dripLeftLen]);
 
   const dripRightPath = useMemo(() => {
     const p = Skia.Path.Make();
-    p.moveTo(candleLeft + candleW - 28, candleTop + 10);
-    p.quadTo(
-      candleLeft + candleW - 32,
-      candleTop + dripRightLen * 0.65,
-      candleLeft + candleW - 26,
-      candleTop + dripRightLen
-    );
-    p.quadTo(
-      candleLeft + candleW - 21,
-      candleTop + dripRightLen * 0.65,
-      candleLeft + candleW - 23,
-      candleTop + 10
-    );
+    const x = candleLeft + candleW - 6;
+    p.moveTo(x, candleTop + 7);
+    p.cubicTo(x + 1, candleTop + dripRightLen * 0.4, x + 2, candleTop + dripRightLen - 7, x + 6, candleTop + dripRightLen);
+    p.cubicTo(x + 11, candleTop + dripRightLen - 7, x + 11, candleTop + dripRightLen * 0.45, x + 6, candleTop + 7);
     p.close();
     return p;
   }, [candleLeft, candleW, candleTop, dripRightLen]);
+
+  const dripFrontPath = useMemo(() => {
+    const p = Skia.Path.Make();
+    const x = candleLeft + 34;
+    p.moveTo(x, candleTop + 10);
+    p.quadTo(x - 4, candleTop + dripFrontLen * 0.72, x + 2.5, candleTop + dripFrontLen);
+    p.quadTo(x + 9, candleTop + dripFrontLen * 0.72, x + 6, candleTop + 10);
+    p.close();
+    return p;
+  }, [candleLeft, candleTop, dripFrontLen]);
 
   const flameTransform = useDerivedValue(() => [
     { translateX: CX },
@@ -373,9 +378,41 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
           />
         </Oval>
 
-        {/* Realistic Melting Wax Drips */}
-        <Path path={dripLeftPath} color="#F5EFE6" opacity={0.92} />
-        <Path path={dripRightPath} color="#EAE2D6" opacity={0.88} />
+        {/* Realistic 3D Raised Melting Wax Drips (Shadow + Glossy Wax + Bead Highlight) */}
+        <Group transform={[{ translateX: 1.5 }, { translateY: 2 }]}>
+          <Path path={dripLeftPath} color="rgba(0,0,0,0.32)">
+            <BlurMask blur={2.5} style="normal" />
+          </Path>
+          <Path path={dripRightPath} color="rgba(0,0,0,0.32)">
+            <BlurMask blur={2.5} style="normal" />
+          </Path>
+          <Path path={dripFrontPath} color="rgba(0,0,0,0.24)">
+            <BlurMask blur={2} style="normal" />
+          </Path>
+        </Group>
+        <Path path={dripLeftPath}>
+          <LinearGradient
+            start={vec(candleLeft - 2, candleTop)}
+            end={vec(candleLeft + 6, candleTop + dripLeftLen)}
+            colors={['#FFF8EC', '#EDE2D3', '#C9BCAE']}
+          />
+        </Path>
+        <Path path={dripRightPath}>
+          <LinearGradient
+            start={vec(candleLeft + candleW - 6, candleTop)}
+            end={vec(candleLeft + candleW + 4, candleTop + dripRightLen)}
+            colors={['#FFF5E4', '#E2D6C6', '#B5A89A']}
+          />
+        </Path>
+        <Path path={dripFrontPath}>
+          <LinearGradient
+            start={vec(candleLeft + 34, candleTop)}
+            end={vec(candleLeft + 38, candleTop + dripFrontLen)}
+            colors={['#FFFBF4', '#F3E9DA', '#D8CCBE']}
+          />
+        </Path>
+        <Circle cx={candleLeft + 1} cy={candleTop + dripLeftLen - 4} r={1.8} color="#FFFFFF" opacity={0.75} />
+        <Circle cx={candleLeft + candleW} cy={candleTop + dripRightLen - 4} r={1.6} color="#FFFFFF" opacity={0.65} />
 
         {/* Curved Braided Wick + Glowing Ember Tip */}
         <Path
