@@ -4,6 +4,7 @@ import { EntitlementState } from '../types/wick';
 
 const PRIVACY_URL = 'https://senthilmkm.github.io/wick/privacy.html';
 const TERMS_URL = 'https://senthilmkm.github.io/wick/terms.html';
+const SUPPORT_URL = 'https://senthilmkm.github.io/wick/support.html';
 
 export type PaywallReason = 'theme' | 'friend' | 'video' | 'pdf' | 'ledger' | 'dome' | 'general';
 
@@ -69,6 +70,10 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
             <Text style={styles.legalDot}>•</Text>
             <Pressable onPress={() => void Linking.openURL(TERMS_URL)}>
               <Text style={styles.legalText}>Terms of Use</Text>
+            </Pressable>
+            <Text style={styles.legalDot}>•</Text>
+            <Pressable onPress={() => void Linking.openURL(SUPPORT_URL)}>
+              <Text style={styles.legalText}>Support</Text>
             </Pressable>
           </View>
         </View>

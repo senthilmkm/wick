@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+
+const SUPPORT_URL = 'https://senthilmkm.github.io/wick/support.html';
 import { THEME_LIST } from '../constants/themes';
 import { canUseTheme } from '../engine/trialGuard';
 import { EntitlementState, ThemeId, UserSettings, WickTheme } from '../types/wick';
@@ -216,11 +218,7 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
             onPress={onUpgradePro}
           >
             <Text style={styles.proBtnText}>
-              {entitlement.isEligibleForIntroTrial
-                ? 'Start 7-Day Free Trial'
-                : priceLabel
-                  ? `Upgrade to Wick Pro (${priceLabel})`
-                  : 'Upgrade to Wick Pro'}
+              {priceLabel ? `Upgrade to Wick Pro (${priceLabel})` : 'Upgrade to Wick Pro'}
             </Text>
           </Pressable>
         )}
@@ -232,6 +230,10 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
       {/* Version & Hidden Simulator Debugger */}
       <Pressable onPress={() => setDevTapCount((c) => c + 1)}>
         <Text style={styles.version}>Wick v1.0.0 • Local-First</Text>
+      </Pressable>
+
+      <Pressable style={styles.supportLink} onPress={() => void Linking.openURL(SUPPORT_URL)}>
+        <Text style={styles.supportText}>Support & Help</Text>
       </Pressable>
 
       {showDebugger && onDebugInjectSteps && (
@@ -294,6 +296,8 @@ const styles = StyleSheet.create({
   restoreBtn: { alignItems: 'center', paddingVertical: 6 },
   restoreText: { color: '#A1A1AA', fontSize: 13 },
   version: { color: '#71717A', textAlign: 'center', fontSize: 12, marginTop: 8 },
+  supportLink: { alignItems: 'center', paddingVertical: 6 },
+  supportText: { color: '#A1A1AA', fontSize: 13, textDecorationLine: 'underline' },
   debugCard: { backgroundColor: '#18181B', borderRadius: 14, padding: 14, gap: 10 },
   debugTitle: { color: '#FF9F43', fontWeight: '700', fontSize: 13 },
   debugRow: { flexDirection: 'row', gap: 10 },

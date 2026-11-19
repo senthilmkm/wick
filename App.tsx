@@ -234,7 +234,19 @@ function WickRoot() {
     return createMorningSnapshot(getLocalDateKey(new Date()), Date.now(), 0, 0, 1);
   });
 
-  const theme = getThemeById(settings.themeId);
+  const effectiveThemeId = canUseTheme(entitlement, settings.themeId, Date.now())
+    ? settings.themeId
+    : 'obsidian_night';
+  const theme = getThemeById(effectiveThemeId);
+
+  const entitlementRef = useRef(entitlement);
+  const friendsRef = useRef(friends);
+  useEffect(() => {
+    entitlementRef.current = entitlement;
+  }, [entitlement]);
+  useEffect(() => {
+    friendsRef.current = friends;
+  }, [friends]);
 
   useEffect(() => {
     stepsTodayRef.current = snapshot.stepsToday;
@@ -406,6 +418,11 @@ function WickRoot() {
         return;
       }
       if (url.includes('icloud.com/share')) {
+        if (!canAddFriend(entitlementRef.current, friendsRef.current.length, Date.now())) {
+          setActiveTab('circle');
+          setPaywallReason('friend');
+          return;
+        }
         void acceptNativeFriendShareUrl(url).then((accepted) => {
           if (accepted) {
             void cloudKitService.refreshFriendCandles().then((remoteFriends) => {
@@ -421,6 +438,11 @@ function WickRoot() {
         return;
       }
       if (url.includes('circle/pair') || url.includes('pair.html')) {
+        if (!canAddFriend(entitlementRef.current, friendsRef.current.length, Date.now())) {
+          setActiveTab('circle');
+          setPaywallReason('friend');
+          return;
+        }
         const idMatch = /[?&]id=([^&]+)/.exec(url);
         const nameMatch = /[?&]name=([^&]+)/.exec(url);
         const streakMatch = /[?&]streak=(\d+)/.exec(url);
