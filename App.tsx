@@ -28,8 +28,10 @@ import {
   buildSparkUniversalLink,
   createSparkToken,
   parseSparkLink,
+  SPARK_SHARED_APP_SECRET,
   startSparkRescue,
   updateSparkRescueProgress,
+  validateSparkToken,
 } from './src/engine/sparkEngine';
 import {
   canAddFriend,
@@ -512,8 +514,9 @@ function WickRoot() {
       if (!token) {
         return;
       }
-      if (Date.now() > token.expiresAt) {
-        showToast('This Spark Request has expired.');
+      const check = validateSparkToken(token, SPARK_SHARED_APP_SECRET, Date.now(), new Set());
+      if (!check.valid) {
+        showToast(check.reason ?? 'Invalid Spark Request.');
         return;
       }
       rescueBaselineStepsRef.current = stepsTodayRef.current;
@@ -963,14 +966,12 @@ function WickRoot() {
   };
 
   const handleSendSpark = async () => {
-    const secret = await storageService.getOrCreateSparkSecret(
-      () => `spk_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
-    );
+    const senderName = settingsRef.current.candleName?.trim() || 'Your friend';
     const token = createSparkToken(
       `spark_${Date.now()}`,
-      'Your friend',
+      senderName,
       'local_ios',
-      secret,
+      SPARK_SHARED_APP_SECRET,
       Date.now()
     );
     const url = buildSparkUniversalLink(token);

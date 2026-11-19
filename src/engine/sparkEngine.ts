@@ -2,6 +2,7 @@ import { ActiveSparkRescue, SparkRequestToken } from '../types/wick';
 
 export const SPARK_STEPS_REQUIRED = 500;
 export const SPARK_EXPIRY_MS = 60 * 60 * 1000; // 60 minutes
+export const SPARK_SHARED_APP_SECRET = 'wick_spark_shared_v1_2026';
 
 /**
  * Deterministic lightweight FNV-1a 64-bit-like hex digest for signing local Spark tokens
