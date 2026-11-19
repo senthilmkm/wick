@@ -978,6 +978,39 @@ function WickRoot() {
     );
   }
 
+  const handleResetLocalData = async () => {
+    memoryFallback.clear();
+    try {
+      mmkvInstance?.clearAll();
+    } catch {
+      // ignore if MMKV unavailable
+    }
+    if (entitlementRef.current.isPro) {
+      kvSet(KEY_PRO_CACHE, '1');
+    }
+    await Promise.allSettled([
+      SecureStore.deleteItemAsync(SECURE_ONBOARDED),
+      SecureStore.deleteItemAsync(SECURE_SETTINGS),
+      SecureStore.deleteItemAsync(SECURE_SNAPSHOT),
+    ]);
+    const now = new Date();
+    const freshSnapshot = createMorningSnapshot(getLocalDateKey(now), now.getTime(), 0, 0, 1);
+    settingsRef.current = DEFAULT_SETTINGS;
+    setSettings(DEFAULT_SETTINGS);
+    setWaxLayers([]);
+    setFriends([]);
+    setActiveRescue(null);
+    rescueBaselineStepsRef.current = null;
+    hkBaselineStepsRef.current = 0;
+    pedometerSessionOffsetRef.current = 0;
+    setSnapshot(freshSnapshot);
+    storageService.saveSnapshot(freshSnapshot, now.getTime());
+    reloadNativeWidgets();
+    setActiveTab('flame');
+    setOnboarded(false);
+    showToast('All local data reset.');
+  };
+
   const handleDebugInjectSteps = (delta: number) => {
     const res = evaluateCandleState({
       snapshot,
@@ -1120,6 +1153,9 @@ function WickRoot() {
             });
           }}
           onUpgradePro={() => setPaywallReason('general')}
+          onResetData={() => {
+            void handleResetLocalData();
+          }}
           onDebugInjectSteps={handleDebugInjectSteps}
         />
       )}

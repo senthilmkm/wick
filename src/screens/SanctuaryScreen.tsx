@@ -1,5 +1,14 @@
 import React, { useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import {
+  Alert,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from 'react-native';
 
 const SUPPORT_URL = 'https://senthilmkm.github.io/wick/support.html';
 import { THEME_LIST } from '../constants/themes';
@@ -18,6 +27,7 @@ interface SanctuaryScreenProps {
   onUpdateSettings: (partial: Partial<UserSettings>) => void;
   onRestorePurchases: () => void;
   onUpgradePro: () => void;
+  onResetData?: () => void;
   onDebugInjectSteps?: (delta: number) => void;
 }
 
@@ -33,6 +43,7 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
   onUpdateSettings,
   onRestorePurchases,
   onUpgradePro,
+  onResetData,
   onDebugInjectSteps,
 }) => {
   const [devTapCount, setDevTapCount] = useState(0);
@@ -225,6 +236,23 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
         <Pressable style={styles.restoreBtn} onPress={onRestorePurchases}>
           <Text style={styles.restoreText}>Restore Purchases</Text>
         </Pressable>
+        {onResetData && (
+          <Pressable
+            style={styles.resetBtn}
+            onPress={() =>
+              Alert.alert(
+                'Reset All Local Data?',
+                'This permanently clears your candle streak, wax ledger, Circle friends, and settings from this device. Your Wick Pro purchase is preserved.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Reset Data', style: 'destructive', onPress: onResetData },
+                ]
+              )
+            }
+          >
+            <Text style={styles.resetText}>Reset All Local Data</Text>
+          </Pressable>
+        )}
       </View>
 
       {/* Version & Hidden Simulator Debugger */}
@@ -295,6 +323,8 @@ const styles = StyleSheet.create({
   trialBannerText: { color: '#FF9F43', fontSize: 13, fontWeight: '600', textAlign: 'center' },
   restoreBtn: { alignItems: 'center', paddingVertical: 6 },
   restoreText: { color: '#A1A1AA', fontSize: 13 },
+  resetBtn: { alignItems: 'center', paddingVertical: 6 },
+  resetText: { color: '#EF4444', fontSize: 13, fontWeight: '600' },
   version: { color: '#71717A', textAlign: 'center', fontSize: 12, marginTop: 8 },
   supportLink: { alignItems: 'center', paddingVertical: 6 },
   supportText: { color: '#A1A1AA', fontSize: 13, textDecorationLine: 'underline' },
