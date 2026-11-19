@@ -1,10 +1,22 @@
-import React, { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
-import Animated, {
+import {
+  BlurMask,
+  Canvas,
+  Circle,
+  Group,
+  LinearGradient,
+  Oval,
+  Path,
+  RadialGradient,
+  RoundedRect,
+  Skia,
+  vec,
+} from '@shopify/react-native-skia';
+import React, { useEffect, useMemo } from 'react';
+import { Dimensions, StyleSheet, View } from 'react-native';
+import {
   Easing,
-  useAnimatedStyle,
+  useDerivedValue,
   useSharedValue,
-  withDelay,
   withRepeat,
   withSequence,
   withSpring,
@@ -18,97 +30,161 @@ interface Candle3DCanvasProps {
   waxLayers: WaxLayer[];
 }
 
-const SPARK_OFFSETS = [
-  { dx: -26, dy: -34 },
-  { dx: 24, dy: -30 },
-  { dx: -16, dy: -46 },
-  { dx: 18, dy: -42 },
-  { dx: 0, dy: -52 },
-];
+const { width: SCREEN_W } = Dimensions.get('window');
+const CANVAS_W = Math.min(SCREEN_W, 420);
+const CANVAS_H = 520;
+const CX = CANVAS_W / 2;
+
+function createTeardropPath(cx: number, baseY: number, w: number, h: number) {
+  const p = Skia.Path.Make();
+  p.moveTo(cx, baseY - h);
+  p.cubicTo(
+    cx + w * 0.55,
+    baseY - h * 0.55,
+    cx + w * 0.72,
+    baseY - h * 0.14,
+    cx,
+    baseY
+  );
+  p.cubicTo(
+    cx - w * 0.72,
+    baseY - h * 0.14,
+    cx - w * 0.55,
+    baseY - h * 0.55,
+    cx,
+    baseY - h
+  );
+  p.close();
+  return p;
+}
 
 export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
   snapshot,
   theme,
   waxLayers,
 }) => {
-  const flicker = useSharedValue(1);
-  const smokeRise = useSharedValue(0);
-  const igniteBloom = useSharedValue(1);
-  const sparkProgress = useSharedValue(0);
+  const breath = useSharedValue(1);
+  const sway = useSharedValue(0);
+  const bloom = useSharedValue(1);
+  const smokeDrift = useSharedValue(0);
 
   useEffect(() => {
-    const isFlickering = snapshot.state === 'FLICKERING' || snapshot.state === 'DYING_EMBER';
-    const duration = isFlickering ? 240 : 900;
-    const minScale = isFlickering ? 0.78 : 0.94;
+    const anxious = snapshot.state === 'FLICKERING' || snapshot.state === 'DYING_EMBER';
+    const breathMs = anxious ? 260 : 1200;
+    const minBreath = anxious ? 0.82 : 0.94;
 
-    flicker.value = withRepeat(
+    breath.value = withRepeat(
       withSequence(
-        withTiming(minScale, { duration, easing: Easing.inOut(Easing.sin) }),
-        withTiming(1.04, { duration, easing: Easing.inOut(Easing.sin) })
+        withTiming(minBreath, { duration: breathMs, easing: Easing.inOut(Easing.sin) }),
+        withTiming(1.06, { duration: breathMs, easing: Easing.inOut(Easing.sin) })
+      ),
+      -1,
+      true
+    );
+
+    sway.value = withRepeat(
+      withSequence(
+        withTiming(anxious ? -0.09 : -0.03, {
+          duration: anxious ? 210 : 1500,
+          easing: Easing.inOut(Easing.sin),
+        }),
+        withTiming(anxious ? 0.09 : 0.03, {
+          duration: anxious ? 230 : 1700,
+          easing: Easing.inOut(Easing.sin),
+        })
       ),
       -1,
       true
     );
 
     if (snapshot.state === 'IGNITING') {
-      igniteBloom.value = 0.15;
-      igniteBloom.value = withSequence(
-        withSpring(1.32, { damping: 8, stiffness: 180 }),
-        withTiming(1, { duration: 450, easing: Easing.out(Easing.quad) })
-      );
-      sparkProgress.value = 0;
-      sparkProgress.value = withDelay(
-        40,
-        withTiming(1, { duration: 650, easing: Easing.out(Easing.cubic) })
+      bloom.value = 0.2;
+      bloom.value = withSequence(
+        withSpring(1.28, { damping: 9, stiffness: 170 }),
+        withTiming(1, { duration: 480, easing: Easing.out(Easing.quad) })
       );
     } else {
-      igniteBloom.value = 1;
-      sparkProgress.value = 0;
+      bloom.value = 1;
     }
 
     if (snapshot.state === 'SMOKING_GRACE') {
-      smokeRise.value = withRepeat(
-        withTiming(1, { duration: 2200, easing: Easing.out(Easing.quad) }),
+      smokeDrift.value = withRepeat(
+        withTiming(1, { duration: 2400, easing: Easing.out(Easing.quad) }),
         -1,
         false
       );
     } else {
-      smokeRise.value = 0;
+      smokeDrift.value = 0;
     }
-  }, [snapshot.state, flicker, smokeRise, igniteBloom, sparkProgress]);
+  }, [snapshot.state, breath, sway, bloom, smokeDrift]);
 
-  const flameAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { perspective: 800 },
-      { rotateX: '6deg' },
-      { scaleY: flicker.value * igniteBloom.value },
-      { scaleX: (1 + (1 - flicker.value) * 0.35) * igniteBloom.value },
-    ],
-    opacity: snapshot.flameIntensity > 0 ? 0.85 + snapshot.flameIntensity * 0.15 : 0,
-  }));
+  const candleHeight = Math.round(230 - snapshot.meltProgress * 105);
+  const candleW = 118;
+  const candleLeft = CX - candleW / 2;
+  const candleBottom = CANVAS_H - 36;
+  const candleTop = candleBottom - candleHeight;
+  const wickBaseY = candleTop + 6;
+  const flameBaseY = wickBaseY - 14;
 
-  const glowAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { perspective: 800 },
-      { scale: (0.95 + snapshot.flameIntensity * 0.45 * flicker.value) * igniteBloom.value },
-    ],
-    opacity: snapshot.flameIntensity * 0.48,
-  }));
+  const intensity = snapshot.flameIntensity;
+  const isNight = snapshot.state === 'NIGHT_SLEEP';
+  const flameH = Math.round(28 + intensity * 56);
+  const flameW = Math.round(18 + intensity * 24);
 
-  const subsurfaceGlowStyle = useAnimatedStyle(() => ({
-    opacity: snapshot.flameIntensity > 0 ? 0.45 + snapshot.flameIntensity * 0.45 : 0,
-    transform: [{ scaleX: igniteBloom.value }],
-  }));
+  const outerFlamePath = useMemo(
+    () => createTeardropPath(CX, flameBaseY, flameW * 1.15, flameH * 1.08),
+    [flameBaseY, flameW, flameH]
+  );
+  const midFlamePath = useMemo(
+    () => createTeardropPath(CX, flameBaseY, flameW * 0.85, flameH * 0.92),
+    [flameBaseY, flameW, flameH]
+  );
+  const innerCorePath = useMemo(
+    () => createTeardropPath(CX, flameBaseY - 3, flameW * 0.42, flameH * 0.52),
+    [flameBaseY, flameW, flameH]
+  );
+  const blueBasePath = useMemo(
+    () => createTeardropPath(CX, flameBaseY + 1, flameW * 0.48, flameH * 0.22),
+    [flameBaseY, flameW, flameH]
+  );
 
-  const smokeAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: -smokeRise.value * 70 }],
-    opacity: snapshot.state === 'SMOKING_GRACE' ? (1 - smokeRise.value) * 0.65 : 0,
-  }));
+  const dripPath = useMemo(() => {
+    const p = Skia.Path.Make();
+    p.moveTo(candleLeft + 22, candleTop + 10);
+    p.quadTo(candleLeft + 18, candleTop + 36, candleLeft + 23, candleTop + 46);
+    p.quadTo(candleLeft + 28, candleTop + 36, candleLeft + 27, candleTop + 10);
+    p.close();
+    return p;
+  }, [candleLeft, candleTop]);
 
-  const candleHeight = Math.round(210 - snapshot.meltProgress * 95);
-  const flameHeight = Math.round(18 + snapshot.flameIntensity * 46);
-  const flameWidth = Math.round(12 + snapshot.flameIntensity * 18);
+  const flameTransform = useDerivedValue(() => [
+    { translateX: CX },
+    { translateY: flameBaseY },
+    { rotate: sway.value },
+    { scaleX: (1 + (1 - breath.value) * 0.25) * bloom.value },
+    { scaleY: breath.value * bloom.value },
+    { translateX: -CX },
+    { translateY: -flameBaseY },
+  ]);
+
+  const haloTransform = useDerivedValue(() => [
+    { translateX: CX },
+    { translateY: flameBaseY - flameH * 0.45 },
+    { scale: (0.94 + intensity * 0.22 * breath.value) * bloom.value },
+    { translateX: -CX },
+    { translateY: -(flameBaseY - flameH * 0.45) },
+  ]);
+
+  const smokeTransform = useDerivedValue(() => [
+    { translateY: -smokeDrift.value * 76 },
+    { scaleX: 1 + smokeDrift.value * 0.8 },
+  ]);
+
   const visibleLayers = waxLayers.slice(-14);
+  const glowColor = isNight ? '#7CC6FE' : theme.ambientGlow;
+  const outerColor = isNight ? '#38BDF8' : '#FF7A18';
+  const midTopColor = isNight ? '#E0F2FE' : '#FFF9E2';
+  const midBottomColor = isNight ? '#0284C7' : snapshot.flameColorHex;
 
   return (
     <View
@@ -116,104 +192,172 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
       accessible
       accessibilityLabel={`Your wick is ${snapshot.state.toLowerCase().replace('_', ' ')}, ${snapshot.stepsToday} steps today`}
     >
-      {/* Dynamic 3D Ambient Radial Halo */}
-      <Animated.View
-        style={[
-          styles.ambientHalo,
-          { backgroundColor: snapshot.state === 'NIGHT_SLEEP' ? '#7CC6FE' : theme.ambientGlow },
-          glowAnimatedStyle,
-        ]}
-      />
-
-      {/* Glass Dome Overlay (24h Rest Freeze) */}
-      {snapshot.state === 'GLASS_DOME' && <View style={styles.glassDome} />}
-
-      {/* Flame / Wick / 3D Flint Sparks / Smoke */}
-      <View style={styles.wickArea}>
-        {snapshot.state === 'IGNITING' &&
-          SPARK_OFFSETS.map((offset, idx) => (
-            <SparkParticle key={idx} progress={sparkProgress} dx={offset.dx} dy={offset.dy} />
-          ))}
-
-        {snapshot.state === 'SMOKING_GRACE' && (
-          <Animated.View style={[styles.smokeWisp, smokeAnimatedStyle]} />
+      <Canvas style={styles.canvas}>
+        {/* 1. Wide Volumetric Room Light Halo */}
+        {intensity > 0 && (
+          <Group transform={haloTransform}>
+            <Circle cx={CX} cy={flameBaseY - flameH * 0.45} r={210}>
+              <RadialGradient
+                c={vec(CX, flameBaseY - flameH * 0.45)}
+                r={210}
+                colors={[
+                  `${glowColor}55`,
+                  `${glowColor}22`,
+                  `${glowColor}08`,
+                  'transparent',
+                ]}
+              />
+            </Circle>
+            <Circle cx={CX} cy={flameBaseY - flameH * 0.4} r={74}>
+              <RadialGradient
+                c={vec(CX, flameBaseY - flameH * 0.4)}
+                r={74}
+                colors={[
+                  isNight ? 'rgba(186,230,253,0.45)' : 'rgba(255,244,214,0.52)',
+                  isNight ? 'rgba(56,189,248,0.18)' : 'rgba(255,140,36,0.22)',
+                  'transparent',
+                ]}
+              />
+              <BlurMask blur={24} style="normal" />
+            </Circle>
+          </Group>
         )}
 
-        {snapshot.flameIntensity > 0 && (
-          <Animated.View
-            style={[
-              styles.flameOuter,
-              {
-                width: flameWidth,
-                height: flameHeight,
-                backgroundColor: snapshot.flameColorHex,
-                shadowColor: snapshot.flameColorHex,
-              },
-              flameAnimatedStyle,
-            ]}
-          >
-            <View style={styles.flameCore} />
-          </Animated.View>
-        )}
+        {/* 2. 3D Wax Cylinder with Cylindrical Shading & Subsurface Scattering */}
+        <RoundedRect
+          x={candleLeft}
+          y={candleTop}
+          width={candleW}
+          height={candleHeight}
+          r={16}
+        >
+          <LinearGradient
+            start={vec(candleLeft, candleTop)}
+            end={vec(candleLeft + candleW, candleTop)}
+            colors={['#9E9386', '#EFE7DC', '#FAF6F0', '#DDD3C5', '#7F756A']}
+            positions={[0, 0.22, 0.42, 0.78, 1]}
+          />
+        </RoundedRect>
 
-        <View
-          style={[
-            styles.wick,
-            snapshot.state === 'SMOKING_GRACE' && styles.wickGlowingTip,
-          ]}
-        />
-      </View>
-
-      {/* 3D Elliptical Wax Top Rim & Subsurface Scattering */}
-      <View style={styles.waxTopRim}>
-        <Animated.View
-          style={[
-            styles.subsurfaceGlow,
-            { backgroundColor: snapshot.flameColorHex },
-            subsurfaceGlowStyle,
-          ]}
-        />
-      </View>
-
-      {/* 3D Wax Cylinder with Specular Shading & Day-N Hardened Layers */}
-      <View style={[styles.candleBody, { height: candleHeight }]}>
-        <View style={styles.cylinderHighlight} />
-        <View style={styles.cylinderShadow} />
-        <View style={styles.moltenPool} />
-        <View style={styles.layersContainer}>
-          {visibleLayers.map((layer) => (
-            <View
+        {/* Hardened Day-N Wax Bands */}
+        {visibleLayers.map((layer, idx) => {
+          const bandH = Math.max(4, Math.round(layer.thicknessMm * 1.6));
+          const bandY = candleBottom - 10 - (idx + 1) * (bandH + 1);
+          if (bandY <= candleTop + 28) {
+            return null;
+          }
+          return (
+            <RoundedRect
               key={layer.id}
-              style={[
-                styles.waxLayerBand,
-                {
-                  backgroundColor: layer.colorHex,
-                  height: Math.max(3, Math.round(layer.thicknessMm * 1.4)),
-                },
+              x={candleLeft}
+              y={bandY}
+              width={candleW}
+              height={bandH}
+              r={2}
+              color={layer.colorHex}
+              opacity={0.78}
+            />
+          );
+        })}
+
+        {/* Subsurface Scattering (warm light penetrating top of wax) */}
+        {intensity > 0 && (
+          <RoundedRect
+            x={candleLeft}
+            y={candleTop}
+            width={candleW}
+            height={58}
+            r={16}
+          >
+            <RadialGradient
+              c={vec(CX, candleTop + 6)}
+              r={68}
+              colors={[
+                isNight ? 'rgba(124,198,254,0.45)' : 'rgba(255,180,70,0.58)',
+                isNight ? 'rgba(124,198,254,0.12)' : 'rgba(255,120,20,0.16)',
+                'transparent',
               ]}
             />
-          ))}
-        </View>
-      </View>
+          </RoundedRect>
+        )}
+
+        {/* 3D Elliptical Wax Top Rim & Molten Pool */}
+        <Oval x={candleLeft} y={candleTop - 8} width={candleW} height={22} color="#E8DFD3" />
+        <Oval x={candleLeft + 8} y={candleTop - 4} width={candleW - 16} height={15}>
+          <RadialGradient
+            c={vec(CX, candleTop + 4)}
+            r={52}
+            colors={[
+              intensity > 0 ? (isNight ? '#BAE6FD' : '#FFE8B6') : '#D4C8BA',
+              '#E5DACD',
+              '#C7BBAE',
+            ]}
+          />
+        </Oval>
+
+        {/* Realistic Wax Drip */}
+        <Path path={dripPath} color="#F3ECE2" opacity={0.92} />
+
+        {/* Braided Wick */}
+        <RoundedRect
+          x={CX - 1.5}
+          y={wickBaseY - 14}
+          width={3}
+          height={16}
+          r={1.5}
+          color={snapshot.state === 'SMOKING_GRACE' ? '#DC2626' : '#27272A'}
+        />
+
+        {/* 3. Photorealistic Multi-Layer Flame */}
+        {intensity > 0 && (
+          <Group transform={flameTransform}>
+            {/* Outer warm bloom */}
+            <Path path={outerFlamePath} color={outerColor} opacity={0.55}>
+              <BlurMask blur={14} style="normal" />
+            </Path>
+            {/* Mid golden-amber teardrop */}
+            <Path path={midFlamePath}>
+              <LinearGradient
+                start={vec(CX, flameBaseY - flameH)}
+                end={vec(CX, flameBaseY)}
+                colors={[midTopColor, '#FFB703', midBottomColor]}
+              />
+            </Path>
+            {/* Incandescent white-hot core */}
+            <Path path={innerCorePath} color="#FFFFFF" opacity={0.95}>
+              <BlurMask blur={3} style="normal" />
+            </Path>
+            {/* Authentic blue flame base right at the wick */}
+            <Path path={blueBasePath} color="#3B82F6" opacity={0.55}>
+              <BlurMask blur={4} style="normal" />
+            </Path>
+          </Group>
+        )}
+
+        {/* 4. Rising Smoke Wisp in SMOKING_GRACE */}
+        {snapshot.state === 'SMOKING_GRACE' && (
+          <Group transform={smokeTransform}>
+            <Circle cx={CX} cy={flameBaseY - 14} r={10} color="rgba(161,161,170,0.4)">
+              <BlurMask blur={10} style="normal" />
+            </Circle>
+          </Group>
+        )}
+
+        {/* 5. Glass Dome (24h Rest Freeze) */}
+        {snapshot.state === 'GLASS_DOME' && (
+          <RoundedRect
+            x={CX - 86}
+            y={candleTop - 110}
+            width={172}
+            height={candleHeight + 124}
+            r={86}
+            color="rgba(255,255,255,0.06)"
+            style="fill"
+          />
+        )}
+      </Canvas>
     </View>
   );
-};
-
-const SparkParticle: React.FC<{
-  progress: Animated.SharedValue<number>;
-  dx: number;
-  dy: number;
-}> = ({ progress, dx, dy }) => {
-  const style = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: progress.value * dx },
-      { translateY: progress.value * dy + progress.value * progress.value * 18 },
-      { scale: 1 - progress.value * 0.7 },
-    ],
-    opacity: progress.value > 0 ? 1 - progress.value : 0,
-  }));
-
-  return <Animated.View style={[styles.sparkDot, style]} />;
 };
 
 const styles = StyleSheet.create({
@@ -222,130 +366,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ambientHalo: {
-    position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    top: '22%',
-  },
-  glassDome: {
-    position: 'absolute',
-    width: 170,
-    height: 320,
-    borderTopLeftRadius: 85,
-    borderTopRightRadius: 85,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.28)',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-  },
-  wickArea: {
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    height: 80,
-    marginBottom: -4,
-    zIndex: 3,
-  },
-  sparkDot: {
-    position: 'absolute',
-    bottom: 14,
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#FFF6D6',
-    shadowColor: '#FF9F43',
-    shadowOpacity: 1,
-    shadowRadius: 6,
-  },
-  flameOuter: {
-    borderTopLeftRadius: 40,
-    borderTopRightRadius: 40,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingBottom: 6,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.95,
-    shadowRadius: 26,
-  },
-  flameCore: {
-    width: '45%',
-    height: '45%',
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    opacity: 0.92,
-  },
-  wick: {
-    width: 3,
-    height: 14,
-    backgroundColor: '#27272A',
-    borderRadius: 1.5,
-  },
-  wickGlowingTip: {
-    backgroundColor: '#DC2626',
-  },
-  smokeWisp: {
-    width: 14,
-    height: 36,
-    borderRadius: 7,
-    backgroundColor: 'rgba(161, 161, 170, 0.45)',
-    marginBottom: 4,
-  },
-  waxTopRim: {
-    width: 108,
-    height: 18,
-    borderRadius: 54,
-    backgroundColor: '#F5EFE6',
-    marginBottom: -9,
-    zIndex: 2,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  subsurfaceGlow: {
-    width: 64,
-    height: 12,
-    borderRadius: 32,
-  },
-  candleBody: {
-    width: 108,
-    borderBottomLeftRadius: 18,
-    borderBottomRightRadius: 18,
-    backgroundColor: '#E7DFD5',
-    overflow: 'hidden',
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 14 },
-    shadowOpacity: 0.65,
-    shadowRadius: 22,
-  },
-  cylinderHighlight: {
-    position: 'absolute',
-    left: 10,
-    top: 0,
-    bottom: 0,
-    width: 18,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-  },
-  cylinderShadow: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: 24,
-    backgroundColor: 'rgba(0,0,0,0.18)',
-  },
-  moltenPool: {
-    height: 14,
-    backgroundColor: '#F5EFE6',
-    opacity: 0.85,
-  },
-  layersContainer: {
-    width: '100%',
-  },
-  waxLayerBand: {
-    width: '100%',
-    opacity: 0.85,
+  canvas: {
+    width: CANVAS_W,
+    height: CANVAS_H,
   },
 });

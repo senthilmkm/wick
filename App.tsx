@@ -1,8 +1,12 @@
 import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
+import * as Print from 'expo-print';
+import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { MMKV } from 'react-native-mmkv';
 import { PaywallModal, PaywallReason } from './src/components/PaywallModal';
 import { getThemeById } from './src/constants/themes';
 import { getLocalDateKey, getLocalWeekKey } from './src/engine/candleMath';
@@ -13,10 +17,12 @@ import {
   igniteWithLighter,
   triggerNightBlowOut,
 } from './src/engine/candleStateMachine';
+import { buildSparkUniversalLink, createSparkToken } from './src/engine/sparkEngine';
 import {
   canAddFriend,
   canExportPdf,
   canExportVideo,
+  canOfferFreeTrial,
   canUseTheme,
   recordVideoExport,
 } from './src/engine/trialGuard';
@@ -25,7 +31,12 @@ import { FlameScreen } from './src/screens/FlameScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { SanctuaryScreen } from './src/screens/SanctuaryScreen';
 import { WaxLedgerScreen } from './src/screens/WaxLedgerScreen';
-import { DEFAULT_SETTINGS } from './src/services/storageService';
+import { buildWaxLedgerPdfHtml } from './src/services/exportService';
+import {
+  fetchTodayHealthKitSteps,
+  subscribeToHealthKitSteps,
+} from './src/services/nativeHealthKit';
+import { DEFAULT_SETTINGS, LocalStorageService } from './src/services/storageService';
 import {
   CandleSnapshot,
   EntitlementState,
@@ -37,16 +48,37 @@ import {
 
 type TabKey = 'flame' | 'ledger' | 'circle' | 'sanctuary';
 
+const mmkv = new MMKV({ id: 'wick.local.v1' });
+const KEY_ONBOARDED = 'wick.onboarded.v1';
+
+const storageService = new LocalStorageService(
+  {
+    getString: (k) => mmkv.getString(k),
+    set: (k, v) => mmkv.set(k, v),
+  },
+  {
+    getItemAsync: (k) => SecureStore.getItemAsync(k),
+    setItemAsync: (k, v) => SecureStore.setItemAsync(k, v),
+  },
+  {
+    writeAppGroupSnapshot: (payload) => {
+      mmkv.set('wick.widget.snapshot', payload);
+    },
+    reloadAllTimelines: () => {},
+  }
+);
+
 export default function App() {
-  const [onboarded, setOnboarded] = useState(false);
+  const [onboarded, setOnboarded] = useState<boolean>(() => mmkv.getString(KEY_ONBOARDED) === '1');
   const [activeTab, setActiveTab] = useState<TabKey>('flame');
   const [tabsVisible, setTabsVisible] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [paywallReason, setPaywallReason] = useState<PaywallReason | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
-  const [waxLayers, setWaxLayers] = useState<WaxLayer[]>([]);
+  const [settings, setSettings] = useState<UserSettings>(() => storageService.loadSettings());
+  const [waxLayers, setWaxLayers] = useState<WaxLayer[]>(() => storageService.loadWaxLayers());
   const [friends] = useState<FriendCandle[]>([]);
   const [entitlement, setEntitlement] = useState<EntitlementState>(() => ({
     isPro: false,
@@ -57,13 +89,99 @@ export default function App() {
     weekKey: getLocalWeekKey(new Date()),
   }));
 
-  const [snapshot, setSnapshot] = useState<CandleSnapshot>(() =>
-    createMorningSnapshot(getLocalDateKey(new Date()), Date.now(), 0, 0, 1)
-  );
+  const [snapshot, setSnapshot] = useState<CandleSnapshot>(() => {
+    const saved = storageService.loadSnapshot();
+    if (saved) {
+      return saved;
+    }
+    return createMorningSnapshot(getLocalDateKey(new Date()), Date.now(), 0, 0, 1);
+  });
 
   const theme = getThemeById(settings.themeId);
 
-  const scheduleAutoHide = () => {
+  const showToast = useCallback((msg: string) => {
+    setStatusMessage(msg);
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current);
+    }
+    toastTimerRef.current = setTimeout(() => setStatusMessage(null), 3200);
+  }, []);
+
+  const syncHealthKit = useCallback(async () => {
+    const steps = await fetchTodayHealthKitSteps();
+    if (steps === null) {
+      return;
+    }
+    setSnapshot((prev) => {
+      const res = evaluateCandleState({
+        snapshot: prev,
+        stepsToday: steps,
+        settings,
+        now: new Date(),
+      });
+      if (res.completedDayLayer) {
+        const nextLayers = storageService.appendWaxLayer(res.completedDayLayer);
+        setWaxLayers(nextLayers);
+      }
+      storageService.saveSnapshot(res.snapshot, Date.now());
+      return res.snapshot;
+    });
+  }, [settings]);
+
+  // Initialize Keychain anti-abuse state + weekly quota on mount
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const now = new Date();
+      const weekKey = getLocalWeekKey(now);
+      const [firstInstall, domeClaimed, quota] = await Promise.all([
+        storageService.ensureFirstInstallRecorded(now.getTime()),
+        storageService.isStarterDomeClaimed(),
+        storageService.loadVideoExportQuota(weekKey),
+      ]);
+      if (!mounted) {
+        return;
+      }
+      setEntitlement((prev) => ({
+        ...prev,
+        firstInstallAt: firstInstall,
+        starterDomeClaimed: domeClaimed,
+        isEligibleForIntroTrial: canOfferFreeTrial(true, firstInstall === now.getTime() ? null : firstInstall, domeClaimed),
+        freeVideoExportsThisWeek: quota.count,
+        weekKey: quota.weekKey,
+      }));
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Sync HealthKit immediately when onboarded, on foreground resume, and on HK sample changes
+  useEffect(() => {
+    if (!onboarded) {
+      return;
+    }
+    void syncHealthKit();
+    const unsubHk = subscribeToHealthKitSteps(() => {
+      void syncHealthKit();
+    });
+    const appSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        void syncHealthKit();
+      }
+    });
+    const poll = setInterval(() => {
+      void syncHealthKit();
+    }, 15000);
+
+    return () => {
+      unsubHk();
+      appSub.remove();
+      clearInterval(poll);
+    };
+  }, [onboarded, syncHealthKit]);
+
+  const scheduleAutoHide = useCallback(() => {
     if (hideTimerRef.current) {
       clearTimeout(hideTimerRef.current);
     }
@@ -73,7 +191,7 @@ export default function App() {
         setTabsVisible(false);
       }, 4000);
     }
-  };
+  }, [activeTab]);
 
   useEffect(() => {
     scheduleAutoHide();
@@ -82,7 +200,94 @@ export default function App() {
         clearTimeout(hideTimerRef.current);
       }
     };
-  }, [activeTab]);
+  }, [activeTab, scheduleAutoHide]);
+
+  const handleUpdateSettings = (partial: Partial<UserSettings>) => {
+    setSettings((prev) => {
+      const next = { ...prev, ...partial };
+      storageService.saveSettings(next);
+      return next;
+    });
+  };
+
+  const handleSendSpark = async () => {
+    const secret = await storageService.getOrCreateSparkSecret(
+      () => `spk_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+    );
+    const token = createSparkToken(
+      `spark_${Date.now()}`,
+      'Your friend',
+      'local_ios',
+      secret,
+      Date.now()
+    );
+    const url = buildSparkUniversalLink(token);
+    await Share.share({
+      title: 'Save my Wick!',
+      message: `My wick is running low! Walk 500 steps to reignite my candle: ${url}`,
+      url,
+    });
+  };
+
+  const handleInviteFriend = async () => {
+    if (!canAddFriend(entitlement, friends.length)) {
+      setPaywallReason('friend');
+      return;
+    }
+    try {
+      await Share.share({
+        title: 'Pair our Wick Candles',
+        message:
+          'Put my live candle on your iPhone Lock Screen with Wick: https://wick.app/circle/pair',
+        url: 'https://wick.app/circle/pair',
+      });
+      showToast('Circle invite link opened.');
+    } catch {
+      showToast('Could not open Share Sheet.');
+    }
+  };
+
+  const handleShareCandle = async () => {
+    const now = new Date();
+    if (!canExportVideo(entitlement, now)) {
+      setPaywallReason('video');
+      return;
+    }
+    try {
+      await Share.share({
+        title: 'My Wick Today',
+        message: `Day ${snapshot.streakDays} • My wick is ${snapshot.state
+          .toLowerCase()
+          .replace('_', ' ')} (${snapshot.stepsToday.toLocaleString('en-US')} steps today) — Keep your wick lit!`,
+      });
+      const updated = recordVideoExport(entitlement, now);
+      setEntitlement(updated);
+      await storageService.saveVideoExportQuota(updated.weekKey, updated.freeVideoExportsThisWeek);
+    } catch {
+      showToast('Could not open Share Sheet.');
+    }
+  };
+
+  const handleExportPdf = async () => {
+    if (!canExportPdf(entitlement)) {
+      setPaywallReason('pdf');
+      return;
+    }
+    try {
+      const html = buildWaxLedgerPdfHtml(
+        waxLayers,
+        snapshot.streakDays,
+        getLocalDateKey(new Date())
+      );
+      const { uri } = await Print.printToFileAsync({ html });
+      await Share.share({
+        title: 'Wick Wax Ledger PDF',
+        url: uri,
+      });
+    } catch {
+      showToast('PDF export failed.');
+    }
+  };
 
   if (!onboarded) {
     return (
@@ -91,18 +296,15 @@ export default function App() {
         <OnboardingScreen
           initialGoal={settings.dailyStepGoal}
           onComplete={(goal) => {
-            setSettings((prev) => ({ ...prev, dailyStepGoal: goal }));
+            handleUpdateSettings({ dailyStepGoal: goal });
+            mmkv.set(KEY_ONBOARDED, '1');
             setOnboarded(true);
+            void syncHealthKit();
           }}
         />
       </GestureHandlerRootView>
     );
   }
-
-  const showToast = (msg: string) => {
-    setStatusMessage(msg);
-    setTimeout(() => setStatusMessage(null), 3000);
-  };
 
   const handleDebugInjectSteps = (delta: number) => {
     const res = evaluateCandleState({
@@ -112,8 +314,10 @@ export default function App() {
       now: new Date(),
     });
     setSnapshot(res.snapshot);
+    storageService.saveSnapshot(res.snapshot, Date.now());
     if (res.completedDayLayer) {
-      setWaxLayers((prev) => [...prev, res.completedDayLayer!]);
+      const nextLayers = storageService.appendWaxLayer(res.completedDayLayer);
+      setWaxLayers(nextLayers);
     }
   };
 
@@ -126,32 +330,39 @@ export default function App() {
           snapshot={snapshot}
           theme={theme}
           waxLayers={waxLayers}
-          statusMessage={statusMessage}
           onStrikeLighter={() => {
-            setSnapshot((prev) => igniteWithLighter(prev, Date.now()));
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            setSnapshot((prev) => {
+              const next = igniteWithLighter(prev, Date.now());
+              storageService.saveSnapshot(next, Date.now());
+              return next;
+            });
             showToast('Wick lit! Walk to keep the flame blazing.');
           }}
           onShareVideo={() => {
-            const now = new Date();
-            if (!canExportVideo(entitlement, now)) {
-              setPaywallReason('video');
-              return;
-            }
-            setEntitlement((prev) => recordVideoExport(prev, now));
-            showToast('Rendering 3s candle loop for Share Sheet...');
+            void handleShareCandle();
           }}
-          onSendSpark={() => showToast('Spark link ready to share with a friend.')}
+          onSendSpark={() => {
+            void handleSendSpark();
+          }}
           onActivateGlassDome={() => {
             const res = activateGlassDome(snapshot, Date.now());
             if (res.activated) {
               setSnapshot(res.snapshot);
+              storageService.saveSnapshot(res.snapshot, Date.now());
+              void storageService.markStarterDomeClaimed();
               showToast('Glass Dome active for 24 hours.');
             } else if (res.reason) {
               showToast(res.reason);
             }
           }}
           onBlowOutNight={() => {
-            setSnapshot((prev) => triggerNightBlowOut(prev, Date.now()));
+            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setSnapshot((prev) => {
+              const next = triggerNightBlowOut(prev, Date.now());
+              storageService.saveSnapshot(next, Date.now());
+              return next;
+            });
             showToast('Goodnight. Wax is cooling.');
           }}
           onToggleControlsVisibility={scheduleAutoHide}
@@ -166,11 +377,7 @@ export default function App() {
           theme={theme}
           entitlement={entitlement}
           onExportPdf={() => {
-            if (!canExportPdf(entitlement)) {
-              setPaywallReason('pdf');
-              return;
-            }
-            showToast('Generating Wax Ledger PDF...');
+            void handleExportPdf();
           }}
           onUpgradePro={() => setPaywallReason('ledger')}
         />
@@ -182,13 +389,11 @@ export default function App() {
           activeRescue={null}
           theme={theme}
           onInviteFriend={() => {
-            if (!canAddFriend(entitlement, friends.length)) {
-              setPaywallReason('friend');
-              return;
-            }
-            showToast('Opening iCloud Share for Lock Screen Widget...');
+            void handleInviteFriend();
           }}
-          onSendSpark={() => showToast('Spark link ready to share with a friend.')}
+          onSendSpark={() => {
+            void handleSendSpark();
+          }}
         />
       )}
 
@@ -203,13 +408,21 @@ export default function App() {
               setPaywallReason('theme');
               return;
             }
-            setSettings((s) => ({ ...s, themeId }));
+            handleUpdateSettings({ themeId });
+            showToast('Theme updated.');
           }}
-          onUpdateSettings={(partial) => setSettings((s) => ({ ...s, ...partial }))}
+          onUpdateSettings={handleUpdateSettings}
           onRestorePurchases={() => showToast('Checking App Store receipt...')}
           onUpgradePro={() => setPaywallReason('general')}
           onDebugInjectSteps={handleDebugInjectSteps}
         />
+      )}
+
+      {/* Global Toast Banner (visible across all tabs) */}
+      {statusMessage && (
+        <View style={styles.toastBanner} pointerEvents="none">
+          <Text style={styles.toastText}>{statusMessage}</Text>
+        </View>
       )}
 
       <PaywallModal
@@ -266,6 +479,22 @@ export default function App() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  toastBanner: {
+    position: 'absolute',
+    bottom: 102,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(24, 24, 27, 0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,159,67,0.35)',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  toastText: {
+    color: '#F5F5F7',
+    fontSize: 13,
+    fontWeight: '600',
+  },
   tabBarWrap: {
     position: 'absolute',
     bottom: 28,
