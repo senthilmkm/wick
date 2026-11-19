@@ -1,3 +1,4 @@
+import { Audio } from 'expo-av';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import * as Print from 'expo-print';
@@ -37,11 +38,22 @@ import { FlameScreen } from './src/screens/FlameScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
 import { SanctuaryScreen } from './src/screens/SanctuaryScreen';
 import { WaxLedgerScreen } from './src/screens/WaxLedgerScreen';
+import { AudioBlowDetector } from './src/services/audioBlowService';
+import {
+  checkProEntitlement,
+  initBilling,
+  purchaseProPackage,
+  restoreProPurchases,
+} from './src/services/billingService';
 import { buildWaxLedgerPdfHtml } from './src/services/exportService';
 import {
   fetchTodayHealthKitSteps,
   subscribeToHealthKitSteps,
 } from './src/services/nativeHealthKit';
+import {
+  notifySmokingGraceIfNeeded,
+  scheduleMorningWakeNotification,
+} from './src/services/notificationService';
 import { DEFAULT_SETTINGS, LocalStorageService } from './src/services/storageService';
 import {
   ActiveSparkRescue,
@@ -58,6 +70,7 @@ type TabKey = 'flame' | 'ledger' | 'circle' | 'sanctuary';
 const mmkv = new MMKV({ id: 'wick.local.v1' });
 const KEY_ONBOARDED = 'wick.onboarded.v1';
 const KEY_PRO_CACHE = 'wick.pro_cached.v1';
+const REVENUECAT_IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY;
 
 const storageService = new LocalStorageService(
   {
@@ -130,6 +143,7 @@ export default function App() {
         settings,
         now: new Date(),
       });
+      void notifySmokingGraceIfNeeded(prev.state, res.snapshot.state);
       if (res.completedDayLayer) {
         const nextLayers = storageService.appendWaxLayer(res.completedDayLayer);
         setWaxLayers(nextLayers);
@@ -156,22 +170,28 @@ export default function App() {
     });
   }, [settings, showToast]);
 
-  // Initialize Keychain anti-abuse state + weekly quota on mount
+  // Initialize Keychain anti-abuse state, weekly quota, and StoreKit/RevenueCat on mount
   useEffect(() => {
     let mounted = true;
+    initBilling(REVENUECAT_IOS_KEY);
     (async () => {
       const now = new Date();
       const weekKey = getLocalWeekKey(now);
-      const [firstInstall, domeClaimed, quota] = await Promise.all([
+      const [firstInstall, domeClaimed, quota, remotePro] = await Promise.all([
         storageService.ensureFirstInstallRecorded(now.getTime()),
         storageService.isStarterDomeClaimed(),
         storageService.loadVideoExportQuota(weekKey),
+        checkProEntitlement(REVENUECAT_IOS_KEY),
       ]);
       if (!mounted) {
         return;
       }
+      if (remotePro) {
+        mmkv.set(KEY_PRO_CACHE, '1');
+      }
       setEntitlement((prev) => ({
         ...prev,
+        isPro: prev.isPro || remotePro,
         firstInstallAt: firstInstall,
         starterDomeClaimed: domeClaimed,
         isEligibleForIntroTrial: canOfferFreeTrial(true, firstInstall === now.getTime() ? null : firstInstall, domeClaimed),
@@ -260,8 +280,83 @@ export default function App() {
     setSettings((prev) => {
       const next = { ...prev, ...partial };
       storageService.saveSettings(next);
+      if (partial.wakeHour !== undefined || partial.wakeMinute !== undefined) {
+        void scheduleMorningWakeNotification(next);
+      }
       return next;
     });
+  };
+
+  const handleBlowOutWithMic = async () => {
+    const completeBlowOut = () => {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setSnapshot((prev) => {
+        const next = triggerNightBlowOut(prev, Date.now());
+        storageService.saveSnapshot(next, Date.now());
+        return next;
+      });
+      showToast('Goodnight. Wax is cooling.');
+    };
+
+    if (!settings.micBlowOutEnabled) {
+      completeBlowOut();
+      return;
+    }
+
+    let recording: Audio.Recording | null = null;
+    const detector = new AudioBlowDetector({
+      setAmbientMixMode: async () => {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: false,
+        });
+      },
+      activateMicSession: async () => {
+        const { granted } = await Audio.requestPermissionsAsync();
+        if (!granted) {
+          return false;
+        }
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+        return true;
+      },
+      deactivateMicSession: async () => {
+        if (recording) {
+          await recording.stopAndUnloadAsync().catch(() => {});
+          recording = null;
+        }
+      },
+    });
+
+    const started = await detector.startBlowModal();
+    if (!started) {
+      completeBlowOut();
+      return;
+    }
+
+    showToast('Blow into your mic now to extinguish...');
+    try {
+      const rec = new Audio.Recording();
+      recording = rec;
+      await rec.prepareToRecordAsync({
+        ...Audio.RecordingOptionsPresets.LOW_QUALITY,
+        isMeteringEnabled: true,
+      });
+      rec.setOnRecordingStatusUpdate((st) => {
+        if (typeof st.metering === 'number' && detector.processMeteringSample(st.metering)) {
+          void detector.stopBlowModal().then(completeBlowOut);
+        }
+      });
+      await rec.startAsync();
+      setTimeout(() => {
+        void detector.stopBlowModal();
+      }, 6000);
+    } catch {
+      await detector.stopBlowModal();
+      completeBlowOut();
+    }
   };
 
   const handleSendSpark = async () => {
@@ -353,6 +448,7 @@ export default function App() {
             handleUpdateSettings({ dailyStepGoal: goal });
             mmkv.set(KEY_ONBOARDED, '1');
             setOnboarded(true);
+            void scheduleMorningWakeNotification({ ...settings, dailyStepGoal: goal });
             void syncHealthKit();
           }}
         />
@@ -412,13 +508,7 @@ export default function App() {
             }
           }}
           onBlowOutNight={() => {
-            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            setSnapshot((prev) => {
-              const next = triggerNightBlowOut(prev, Date.now());
-              storageService.saveSnapshot(next, Date.now());
-              return next;
-            });
-            showToast('Goodnight. Wax is cooling.');
+            void handleBlowOutWithMic();
           }}
           onToggleControlsVisibility={scheduleAutoHide}
         />
@@ -467,7 +557,17 @@ export default function App() {
             showToast('Theme updated.');
           }}
           onUpdateSettings={handleUpdateSettings}
-          onRestorePurchases={() => showToast('Checking App Store receipt...')}
+          onRestorePurchases={() => {
+            void restoreProPurchases(REVENUECAT_IOS_KEY).then((restored) => {
+              if (restored) {
+                mmkv.set(KEY_PRO_CACHE, '1');
+                setEntitlement((e) => ({ ...e, isPro: true, isEligibleForIntroTrial: false }));
+                showToast('Wick Pro restored!');
+              } else {
+                showToast('No active Pro subscription found.');
+              }
+            });
+          }}
           onUpgradePro={() => setPaywallReason('general')}
           onDebugInjectSteps={handleDebugInjectSteps}
         />
@@ -485,14 +585,28 @@ export default function App() {
         reason={paywallReason ?? 'general'}
         entitlement={entitlement}
         onStartPro={() => {
-          mmkv.set(KEY_PRO_CACHE, '1');
-          setEntitlement((e) => ({ ...e, isPro: true, isEligibleForIntroTrial: false }));
-          setPaywallReason(null);
-          showToast('Welcome to Wick Pro!');
+          void purchaseProPackage(REVENUECAT_IOS_KEY).then(({ purchased }) => {
+            if (purchased) {
+              mmkv.set(KEY_PRO_CACHE, '1');
+              setEntitlement((e) => ({ ...e, isPro: true, isEligibleForIntroTrial: false }));
+              setPaywallReason(null);
+              showToast('Welcome to Wick Pro!');
+            } else {
+              showToast('Purchase could not be completed.');
+            }
+          });
         }}
         onRestorePurchases={() => {
-          setPaywallReason(null);
-          showToast('Checking App Store receipt...');
+          void restoreProPurchases(REVENUECAT_IOS_KEY).then((restored) => {
+            setPaywallReason(null);
+            if (restored) {
+              mmkv.set(KEY_PRO_CACHE, '1');
+              setEntitlement((e) => ({ ...e, isPro: true, isEligibleForIntroTrial: false }));
+              showToast('Wick Pro restored!');
+            } else {
+              showToast('No active Pro subscription found.');
+            }
+          });
         }}
         onClose={() => setPaywallReason(null)}
       />
