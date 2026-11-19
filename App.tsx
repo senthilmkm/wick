@@ -203,6 +203,7 @@ function WickRoot() {
   const [tiltAngle, setTiltAngle] = useState(0);
   const [proPriceLabel, setProPriceLabel] = useState<string | null>(null);
   const [showMoodModal, setShowMoodModal] = useState(false);
+  const prevCandleStateRef = useRef<CandleSnapshot['state'] | null>(null);
   const [isAppActive, setIsAppActive] = useState(true);
   const previousBrightnessRef = useRef<number | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -267,6 +268,14 @@ function WickRoot() {
   useEffect(() => {
     stepsTodayRef.current = snapshot.stepsToday;
   }, [snapshot.stepsToday]);
+
+  useEffect(() => {
+    const prev = prevCandleStateRef.current;
+    prevCandleStateRef.current = snapshot.state;
+    if (prev !== null && prev !== 'NIGHT_SLEEP' && snapshot.state === 'NIGHT_SLEEP' && !snapshot.mood) {
+      setShowMoodModal(true);
+    }
+  }, [snapshot.state, snapshot.mood]);
 
   const showToast = useCallback((msg: string) => {
     setStatusMessage(msg);
@@ -725,9 +734,6 @@ function WickRoot() {
               setWindIntensity(0);
               void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               setSnapshot((prev) => {
-                if (prev.state !== 'NIGHT_SLEEP' && !prev.mood) {
-                  setShowMoodModal(true);
-                }
                 const next = triggerNightBlowOut(prev, Date.now());
                 storageService.saveSnapshot(next, Date.now());
                 void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(next));
@@ -737,6 +743,11 @@ function WickRoot() {
             });
           }
         });
+        if (cancelled) {
+          await rec.stopAndUnloadAsync().catch(() => {});
+          recording = null;
+          return;
+        }
         await rec.startAsync();
       } catch {
         await detector.stopBlowModal();
@@ -867,9 +878,6 @@ function WickRoot() {
     const completeBlowOut = () => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setSnapshot((prev) => {
-        if (prev.state !== 'NIGHT_SLEEP' && !prev.mood) {
-          setShowMoodModal(true);
-        }
         const next = triggerNightBlowOut(prev, Date.now());
         storageService.saveSnapshot(next, Date.now());
         void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(next));
@@ -924,6 +932,7 @@ function WickRoot() {
     }
 
     showToast('Blow into your mic now to extinguish...');
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     try {
       const rec = new Audio.Recording();
       recording = rec;
@@ -933,14 +942,21 @@ function WickRoot() {
       });
       rec.setOnRecordingStatusUpdate((st) => {
         if (typeof st.metering === 'number' && detector.processMeteringSample(st.metering)) {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+          }
           void detector.stopBlowModal().then(completeBlowOut);
         }
       });
       await rec.startAsync();
-      setTimeout(() => {
+      timeoutId = setTimeout(() => {
         void detector.stopBlowModal();
       }, 6000);
     } catch {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
       await detector.stopBlowModal();
       completeBlowOut();
     }

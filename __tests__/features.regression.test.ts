@@ -132,4 +132,25 @@ describe('Wick enhancements & bug-fix regression suite', () => {
     expect(isNighttimeWindow(new Date(2026, 10, 19, 11, 30), 7, 0, 23, 0)).toBe(false);
     expect(isNighttimeWindow(new Date(2026, 10, 19, 23, 15), 7, 0, 23, 0)).toBe(true);
   });
+
+  it('resets streak across multi-day absence and preserves mood tint on consecutive rollover', () => {
+    const day1 = new Date(2026, 10, 17, 22, 0);
+    const snap = {
+      ...createMorningSnapshot('2026-11-17', day1.getTime(), 5, 100, 1),
+      state: 'BLAZING' as const,
+      stepsToday: 8500,
+      ignitedAt: day1.getTime() - 3600000,
+      mood: 'Proud' as const,
+    };
+    // Skip Nov 18 completely -> arrive Nov 19 -> streak resets to 0
+    const skipped = evaluateCandleState({
+      snapshot: snap,
+      stepsToday: 0,
+      settings: DEFAULT_SETTINGS,
+      now: new Date(2026, 10, 19, 8, 0),
+    });
+    expect(skipped.completedDayLayer?.mood).toBe('Proud');
+    expect(skipped.snapshot.streakDays).toBe(0);
+    expect(skipped.snapshot.mood).toBeUndefined();
+  });
 });

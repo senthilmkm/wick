@@ -27,12 +27,12 @@ export function getLocalDateKey(date: Date): string {
  * Computes the ISO week key (YYYY-Www) in local time for weekly quota tracking.
  */
 export function getLocalWeekKey(date: Date): string {
-  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const dayNum = d.getDay() || 7;
-  d.setDate(d.getDate() + 4 - dayNum);
-  const yearStart = new Date(d.getFullYear(), 0, 1);
-  const weekNo = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-  return `${d.getFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = Date.UTC(d.getUTCFullYear(), 0, 1);
+  const weekNo = Math.ceil(((d.getTime() - yearStart) / 86400000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
 }
 
 /**
