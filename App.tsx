@@ -50,6 +50,7 @@ type TabKey = 'flame' | 'ledger' | 'circle' | 'sanctuary';
 
 const mmkv = new MMKV({ id: 'wick.local.v1' });
 const KEY_ONBOARDED = 'wick.onboarded.v1';
+const KEY_PRO_CACHE = 'wick.pro_cached.v1';
 
 const storageService = new LocalStorageService(
   {
@@ -81,7 +82,7 @@ export default function App() {
   const [waxLayers, setWaxLayers] = useState<WaxLayer[]>(() => storageService.loadWaxLayers());
   const [friends] = useState<FriendCandle[]>([]);
   const [entitlement, setEntitlement] = useState<EntitlementState>(() => ({
-    isPro: false,
+    isPro: mmkv.getString(KEY_PRO_CACHE) === '1',
     isEligibleForIntroTrial: true,
     starterDomeClaimed: false,
     firstInstallAt: Date.now(),
@@ -430,6 +431,7 @@ export default function App() {
         reason={paywallReason ?? 'general'}
         entitlement={entitlement}
         onStartPro={() => {
+          mmkv.set(KEY_PRO_CACHE, '1');
           setEntitlement((e) => ({ ...e, isPro: true, isEligibleForIntroTrial: false }));
           setPaywallReason(null);
           showToast('Welcome to Wick Pro!');

@@ -28,6 +28,7 @@ interface Candle3DCanvasProps {
   snapshot: CandleSnapshot;
   theme: WickTheme;
   waxLayers: WaxLayer[];
+  resumeTick?: number;
 }
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -62,6 +63,7 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
   snapshot,
   theme,
   waxLayers,
+  resumeTick = 0,
 }) => {
   const breath = useSharedValue(1);
   const sway = useSharedValue(0);
@@ -116,7 +118,7 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
     } else {
       smokeDrift.value = 0;
     }
-  }, [snapshot.state, breath, sway, bloom, smokeDrift]);
+  }, [snapshot.state, resumeTick, breath, sway, bloom, smokeDrift]);
 
   const candleHeight = Math.round(230 - snapshot.meltProgress * 105);
   const candleW = 118;
