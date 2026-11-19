@@ -88,8 +88,9 @@ describe('Wick enhancements & bug-fix regression suite', () => {
     expect(parseSparkLink(url)).toEqual(token);
   });
 
-  it('defaults liveBreezeEnabled to true and computes smooth wind shake intensity', () => {
+  it('defaults liveBreezeEnabled to true, lanternModeEnabled to false, and computes wind intensity', () => {
     expect(DEFAULT_SETTINGS.liveBreezeEnabled).toBe(true);
+    expect(DEFAULT_SETTINGS.lanternModeEnabled).toBe(false);
     expect(computeWindShakeIntensity(BREEZE_MIN_DECIBEL)).toBe(0);
     expect(computeWindShakeIntensity(BLOW_DECIBEL_THRESHOLD)).toBe(1);
   });

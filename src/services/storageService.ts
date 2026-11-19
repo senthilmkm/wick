@@ -36,6 +36,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   themeId: 'obsidian_night',
   micBlowOutEnabled: true,
   liveBreezeEnabled: true,
+  lanternModeEnabled: false,
   sleepFocusSyncEnabled: true,
   soundEffectsEnabled: true,
 };

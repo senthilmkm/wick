@@ -31,6 +31,7 @@ interface Candle3DCanvasProps {
   waxLayers: WaxLayer[];
   resumeTick?: number;
   windIntensity?: number;
+  lanternMode?: boolean;
 }
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -76,6 +77,7 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
   waxLayers,
   resumeTick = 0,
   windIntensity = 0,
+  lanternMode = false,
 }) => {
   const breath = useSharedValue(1);
   const sway = useSharedValue(0);
@@ -249,19 +251,23 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
       accessibilityLabel={`Your wick is ${snapshot.state.toLowerCase().replace('_', ' ')}, ${snapshot.stepsToday} steps today`}
     >
       <Canvas style={styles.canvas}>
-        {/* 1. 3-Stage Volumetric Room Light Around Flame */}
+        {/* 1. 3-Stage Volumetric Room Light Around Flame (Expanded in Lantern Mode) */}
         {intensity > 0 && (
           <Group transform={haloTransform}>
-            <Circle cx={CX} cy={flameBaseY - flameH * 0.45} r={245}>
+            <Circle cx={CX} cy={flameBaseY - flameH * 0.45} r={lanternMode ? 360 : 245}>
               <RadialGradient
                 c={vec(CX, flameBaseY - flameH * 0.45)}
-                r={245}
-                colors={[
-                  `${glowColor}52`,
-                  `${glowColor}20`,
-                  `${glowColor}08`,
-                  'transparent',
-                ]}
+                r={lanternMode ? 360 : 245}
+                colors={
+                  lanternMode
+                    ? ['#FFF6D6CC', '#FF9E2C88', '#FF8C2433', 'transparent']
+                    : [
+                        `${glowColor}52`,
+                        `${glowColor}20`,
+                        `${glowColor}08`,
+                        'transparent',
+                      ]
+                }
               />
             </Circle>
             <Circle cx={CX} cy={flameBaseY - flameH * 0.4} r={108}>

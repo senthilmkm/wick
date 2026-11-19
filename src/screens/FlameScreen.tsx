@@ -107,6 +107,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
           waxLayers={waxLayers}
           resumeTick={resumeTick}
           windIntensity={windIntensity}
+          lanternMode={settings.lanternModeEnabled}
         />
       </Pressable>
 

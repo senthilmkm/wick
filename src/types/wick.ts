@@ -38,6 +38,7 @@ export interface UserSettings {
   themeId: ThemeId;
   micBlowOutEnabled: boolean;
   liveBreezeEnabled: boolean;
+  lanternModeEnabled: boolean;
   sleepFocusSyncEnabled: boolean;
   soundEffectsEnabled: boolean;
 }

@@ -46,6 +46,10 @@ import {
   purchaseProPackage,
   restoreProPurchases,
 } from './src/services/billingService';
+import {
+  enableLanternBrightness,
+  restoreLanternBrightness,
+} from './src/services/lanternService';
 import { buildWaxLedgerPdfHtml } from './src/services/exportService';
 import {
   fetchTodayHealthKitSteps,
@@ -169,6 +173,7 @@ function WickRoot() {
   const [paywallReason, setPaywallReason] = useState<PaywallReason | null>(null);
   const [resumeTick, setResumeTick] = useState(0);
   const [windIntensity, setWindIntensity] = useState(0);
+  const previousBrightnessRef = useRef<number | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -440,6 +445,41 @@ function WickRoot() {
       clearInterval(poll);
     };
   }, [onboarded, syncHealthKit, applyStepTotal]);
+
+  // Lantern Mode: boost screen brightness to 100% on Flame tab when lit, restore on exit
+  useEffect(() => {
+    const active =
+      hydrated &&
+      onboarded &&
+      activeTab === 'flame' &&
+      settings.lanternModeEnabled &&
+      snapshot.flameIntensity > 0;
+
+    if (!active) {
+      if (previousBrightnessRef.current !== null) {
+        const prev = previousBrightnessRef.current;
+        previousBrightnessRef.current = null;
+        void restoreLanternBrightness(prev);
+      }
+      return;
+    }
+
+    let cancelled = false;
+    void enableLanternBrightness().then((prev) => {
+      if (!cancelled && prev !== null) {
+        previousBrightnessRef.current = prev;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      if (previousBrightnessRef.current !== null) {
+        const prev = previousBrightnessRef.current;
+        previousBrightnessRef.current = null;
+        void restoreLanternBrightness(prev);
+      }
+    };
+  }, [hydrated, onboarded, activeTab, settings.lanternModeEnabled, snapshot.flameIntensity > 0]);
 
   // Live breeze-shake on blow when Flame screen is open and enabled in Sanctuary
   useEffect(() => {

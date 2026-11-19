@@ -16,6 +16,7 @@
     "expo": "~52.0.0",
     "expo-av": "~15.0.0",
     "expo-blur": "~14.0.0",
+    "expo-brightness": "~13.0.3",
     "expo-haptics": "~14.0.0",
     "expo-notifications": "~0.29.0",
     "expo-print": "~14.0.0",
