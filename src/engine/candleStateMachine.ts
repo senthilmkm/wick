@@ -363,6 +363,24 @@ export function activateGlassDome(
 }
 
 /**
+ * Manually lifts an active Glass Dome early so the candle resumes normal pacing.
+ */
+export function removeGlassDome(snapshot: CandleSnapshot, nowMs: number): CandleSnapshot {
+  if (snapshot.state !== 'GLASS_DOME') {
+    return snapshot;
+  }
+  const resumedState: CandleState = snapshot.ignitedAt !== null ? 'STEADY' : 'UNLIT_MORNING';
+  return {
+    ...snapshot,
+    state: resumedState,
+    glassDomeActiveUntil: null,
+    flameIntensity: computeFlameIntensity(resumedState, snapshot.paceRatio),
+    flameColorHex: getFlameColorHex(resumedState),
+    updatedAt: nowMs,
+  };
+}
+
+/**
  * Reignites a dying, smoking, or extinguished candle via a friend's 500-step Spark Rescue.
  */
 export function reigniteFromSpark(snapshot: CandleSnapshot, nowMs: number): CandleSnapshot {

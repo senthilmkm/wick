@@ -16,6 +16,7 @@ interface FlameScreenProps {
   onShareVideo: () => void;
   onSendSpark: () => void;
   onActivateGlassDome: () => void;
+  onRemoveGlassDome: () => void;
   onBlowOutNight: () => void;
   onToggleControlsVisibility: () => void;
 }
@@ -31,6 +32,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
   onShareVideo,
   onSendSpark,
   onActivateGlassDome,
+  onRemoveGlassDome,
   onBlowOutNight,
   onToggleControlsVisibility,
 }) => {
@@ -179,15 +181,27 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
           >
             <Text style={styles.sheetBtnText}>Blow Out for Night</Text>
           </Pressable>
-          <Pressable
-            style={styles.sheetBtn}
-            onPress={() => {
-              setShowActionsSheet(false);
-              onActivateGlassDome();
-            }}
-          >
-            <Text style={styles.sheetBtnText}>Drop Glass Dome (24h Pause)</Text>
-          </Pressable>
+          {snapshot.state === 'GLASS_DOME' ? (
+            <Pressable
+              style={styles.sheetBtn}
+              onPress={() => {
+                setShowActionsSheet(false);
+                onRemoveGlassDome();
+              }}
+            >
+              <Text style={styles.sheetBtnText}>Lift Glass Dome</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              style={styles.sheetBtn}
+              onPress={() => {
+                setShowActionsSheet(false);
+                onActivateGlassDome();
+              }}
+            >
+              <Text style={styles.sheetBtnText}>Drop Glass Dome (24h Pause)</Text>
+            </Pressable>
+          )}
           <Pressable
             style={[styles.sheetBtn, styles.sheetCancel]}
             onPress={() => setShowActionsSheet(false)}

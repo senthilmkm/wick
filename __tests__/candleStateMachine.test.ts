@@ -5,6 +5,7 @@ import {
   GLASS_DOME_WAX_COST,
   igniteWithLighter,
   reigniteFromSpark,
+  removeGlassDome,
   RESUSCITATION_STEPS_REQUIRED,
   SMOKING_GRACE_DURATION_MS,
   triggerNightBlowOut,
@@ -256,6 +257,18 @@ describe('candleStateMachine & regression lifecycle', () => {
     const broke = createMorningSnapshot('2026-11-18', now.getTime(), 0, 10, 0);
     const actFail = activateGlassDome(broke, now.getTime());
     expect(actFail.activated).toBe(false);
+
+    // Manual lift of Glass Dome (both unlit and ignited) plus no-op when not under dome
+    const liftedUnlit = removeGlassDome(act1.snapshot, now.getTime() + 5000);
+    expect(liftedUnlit.state).toBe('UNLIT_MORNING');
+    expect(liftedUnlit.glassDomeActiveUntil).toBeNull();
+    expect(removeGlassDome(liftedUnlit, now.getTime() + 6000)).toBe(liftedUnlit);
+
+    const liftedIgnited = removeGlassDome(
+      { ...act1.snapshot, ignitedAt: now.getTime() - 1000 },
+      now.getTime() + 5000
+    );
+    expect(liftedIgnited.state).toBe('STEADY');
 
     // Morning snapshot with active dome carries into next day
     const nextDay = createMorningSnapshot('2026-11-19', now.getTime(), 5, 0, 0, now.getTime() + 50000);

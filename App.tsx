@@ -16,6 +16,7 @@ import {
   createMorningSnapshot,
   evaluateCandleState,
   igniteWithLighter,
+  removeGlassDome,
   triggerNightBlowOut,
 } from './src/engine/candleStateMachine';
 import {
@@ -447,7 +448,8 @@ function WickRoot() {
       !onboarded ||
       activeTab !== 'flame' ||
       !settings.liveBreezeEnabled ||
-      snapshot.flameIntensity <= 0
+      snapshot.flameIntensity <= 0 ||
+      snapshot.state === 'GLASS_DOME'
     ) {
       setWindIntensity(0);
       return;
@@ -530,6 +532,7 @@ function WickRoot() {
     settings.liveBreezeEnabled,
     settings.micBlowOutEnabled,
     snapshot.flameIntensity > 0,
+    snapshot.state,
     showToast,
   ]);
 
@@ -567,6 +570,10 @@ function WickRoot() {
   };
 
   const handleBlowOutWithMic = async () => {
+    if (snapshot.state === 'GLASS_DOME') {
+      showToast('Glass Dome protects the flame. Lift it first to blow out.');
+      return;
+    }
     const completeBlowOut = () => {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setSnapshot((prev) => {
@@ -789,10 +796,16 @@ function WickRoot() {
               setSnapshot(res.snapshot);
               storageService.saveSnapshot(res.snapshot, Date.now());
               void storageService.markStarterDomeClaimed();
-              showToast('Glass Dome active for 24 hours.');
+              showToast('Glass Dome active — flame protected from wind.');
             } else if (res.reason) {
               showToast(res.reason);
             }
+          }}
+          onRemoveGlassDome={() => {
+            const next = removeGlassDome(snapshot, Date.now());
+            setSnapshot(next);
+            storageService.saveSnapshot(next, Date.now());
+            showToast('Glass Dome lifted.');
           }}
           onBlowOutNight={() => {
             void handleBlowOutWithMic();
