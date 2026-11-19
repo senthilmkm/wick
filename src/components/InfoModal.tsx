@@ -149,6 +149,10 @@ export const InfoModal: React.FC<InfoModalProps> = ({ visible, onClose }) => {
             {/* Interactive Candle Flame Flavors Preview */}
             <View style={styles.flavorCard}>
               <Text style={styles.flavorHeader}>Tap to preview candle flavors by pace %</Text>
+              <Text style={styles.paceExplainer}>
+                Pace % compares your steps so far today against where you should be between your Wake
+                and Sleep hours.
+              </Text>
               <View style={styles.previewRow}>
                 <Canvas style={styles.miniCanvas}>
                   {flavor.intensity > 0 ? (
@@ -274,6 +278,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     textTransform: 'uppercase',
+  },
+  paceExplainer: {
+    color: '#D4D4D8',
+    fontSize: 13,
+    lineHeight: 18,
   },
   previewRow: {
     flexDirection: 'row',
