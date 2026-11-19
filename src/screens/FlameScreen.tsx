@@ -204,7 +204,13 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
             </Canvas>
             <Text style={styles.lighterSparkText}>Strike Lighter</Text>
           </Pressable>
-          <Text style={styles.lighterHint}>Tap lighter or take 5 steps to ignite</Text>
+          <Pressable onPress={onStrikeLighter}>
+            <Text style={styles.lighterHint}>
+              {snapshot.state === 'NIGHT_SLEEP'
+                ? 'Tap lighter to relight'
+                : 'Tap lighter or walk 5 steps to ignite'}
+            </Text>
+          </Pressable>
         </View>
       )}
 
