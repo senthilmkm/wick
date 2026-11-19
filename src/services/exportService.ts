@@ -28,7 +28,7 @@ export function buildWaxLedgerPdfHtml(
     .map(
       (layer) => `
       <tr>
-        <td>${escapeHtml(layer.date)}</td>
+        <td>${escapeHtml(layer.date)}${layer.mood ? ` • ${escapeHtml(layer.mood)}` : ''}</td>
         <td><span style="display:inline-block;width:12px;height:12px;border-radius:6px;background:${escapeHtml(layer.colorHex)};vertical-align:middle;margin-right:6px;"></span>${escapeHtml(layer.colorHex)}</td>
         <td>${layer.stepsAchieved.toLocaleString('en-US')} / ${layer.stepGoal.toLocaleString('en-US')}</td>
         <td>${layer.thicknessMm.toFixed(1)} mm</td>

@@ -12,7 +12,7 @@ import {
   vec,
 } from '@shopify/react-native-skia';
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Dimensions, StyleSheet, View } from 'react-native';
+import { Dimensions, StyleSheet, Text, View } from 'react-native';
 import {
   Easing,
   useDerivedValue,
@@ -36,6 +36,7 @@ interface Candle3DCanvasProps {
   lanternMode?: boolean;
   goalMet?: boolean;
   sedentaryDraft?: boolean;
+  candleName?: string;
 }
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -85,6 +86,7 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
   lanternMode = false,
   goalMet = false,
   sedentaryDraft = false,
+  candleName,
 }) => {
   const breath = useSharedValue(1);
   const sway = useSharedValue(0);
@@ -342,7 +344,8 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
       accessible
       accessibilityLabel={`Your wick is ${snapshot.state.toLowerCase().replace('_', ' ')}, ${snapshot.stepsToday} steps today`}
     >
-      <Canvas style={styles.canvas}>
+      <View style={styles.canvas}>
+        <Canvas style={styles.canvas}>
         {/* 1. 3-Stage Volumetric Room Light Around Flame (Expanded in Lantern Mode) */}
         {intensity > 0 && (
           <Group transform={haloTransform}>
@@ -609,7 +612,18 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
             </Path>
           </Group>
         )}
-      </Canvas>
+        </Canvas>
+        {Boolean(candleName?.trim()) && (
+          <View
+            pointerEvents="none"
+            style={[styles.engravedWrap, { top: candleBottom - 26, left: candleLeft, width: candleW }]}
+          >
+            <Text style={styles.engravedText} numberOfLines={1}>
+              {candleName!.trim().slice(0, 12).toUpperCase()}
+            </Text>
+          </View>
+        )}
+      </View>
     </View>
   );
 };
@@ -636,5 +650,16 @@ const styles = StyleSheet.create({
   canvas: {
     width: CANVAS_W,
     height: CANVAS_H,
+  },
+  engravedWrap: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  engravedText: {
+    color: 'rgba(74, 58, 44, 0.55)',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 1.8,
   },
 });

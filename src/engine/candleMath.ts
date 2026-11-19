@@ -1,4 +1,17 @@
-import { CandleState } from '../types/wick';
+import { CandleMood, CandleState } from '../types/wick';
+
+export const CANDLE_MOOD_COLORS: Record<CandleMood, string> = {
+  Calm: '#7FA99B',
+  Grateful: '#F4B942',
+  Energized: '#FF7A33',
+  Proud: '#D97762',
+  Tired: '#8E8BA8',
+  Heavy: '#6D597A',
+};
+
+export function getMoodWaxColorHex(mood: CandleMood): string {
+  return CANDLE_MOOD_COLORS[mood];
+}
 
 /**
  * Formats a Date into a local YYYY-MM-DD string without UTC timezone drift.

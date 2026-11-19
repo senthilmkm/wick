@@ -8,6 +8,7 @@ import {
   deriveWaxLayerSpec,
   getFlameColorHex,
   getLocalDateKey,
+  getMoodWaxColorHex,
 } from './candleMath';
 
 export const FIRST_STEP_IGNITION_THRESHOLD = 5;
@@ -94,11 +95,12 @@ export function evaluateCandleState(input: StepEvaluationInput): StepEvaluationR
       completedDayLayer = {
         id: `wax_${current.dateKey}`,
         date: current.dateKey,
-        colorHex: waxSpec.colorHex,
+        colorHex: current.mood ? getMoodWaxColorHex(current.mood) : waxSpec.colorHex,
         thicknessMm: waxSpec.thicknessMm,
         stepsAchieved: current.stepsToday,
         stepGoal: settings.dailyStepGoal,
         peakIntensity: current.flameIntensity,
+        ...(current.mood ? { mood: current.mood } : {}),
       };
     }
 

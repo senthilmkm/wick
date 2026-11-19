@@ -5,12 +5,17 @@ import * as Print from 'expo-print';
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Linking, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { AppState, Linking, Modal, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { MMKV } from 'react-native-mmkv';
 import { PaywallModal, PaywallReason } from './src/components/PaywallModal';
 import { getThemeById } from './src/constants/themes';
-import { getLocalDateKey, getLocalWeekKey, isNighttimeWindow } from './src/engine/candleMath';
+import {
+  CANDLE_MOOD_COLORS,
+  getLocalDateKey,
+  getLocalWeekKey,
+  isNighttimeWindow,
+} from './src/engine/candleMath';
 import {
   activateGlassDome,
   createMorningSnapshot,
@@ -76,6 +81,7 @@ import { DEFAULT_SETTINGS, LocalStorageService } from './src/services/storageSer
 import { subscribeToTiltAngle } from './src/services/tiltService';
 import {
   ActiveSparkRescue,
+  CandleMood,
   CandleSnapshot,
   EntitlementState,
   FriendCandle,
@@ -83,6 +89,8 @@ import {
   UserSettings,
   WaxLayer,
 } from './src/types/wick';
+
+const MOOD_LIST = Object.keys(CANDLE_MOOD_COLORS) as CandleMood[];
 
 type TabKey = 'flame' | 'ledger' | 'circle' | 'sanctuary';
 
@@ -194,6 +202,7 @@ function WickRoot() {
   const [windIntensity, setWindIntensity] = useState(0);
   const [tiltAngle, setTiltAngle] = useState(0);
   const [proPriceLabel, setProPriceLabel] = useState<string | null>(null);
+  const [showMoodModal, setShowMoodModal] = useState(false);
   const [isAppActive, setIsAppActive] = useState(true);
   const previousBrightnessRef = useRef<number | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -720,6 +729,7 @@ function WickRoot() {
                 void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(next));
                 return next;
               });
+              setShowMoodModal(true);
               showToast('Goodnight. Wax is cooling.');
             });
           }
@@ -852,6 +862,7 @@ function WickRoot() {
         void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(next));
         return next;
       });
+      setShowMoodModal(true);
       showToast('Goodnight. Wax is cooling.');
     };
 
@@ -1020,12 +1031,17 @@ function WickRoot() {
         <StatusBar style="light" />
         <OnboardingScreen
           initialGoal={settings.dailyStepGoal}
-          onComplete={(goal) => {
-            handleUpdateSettings({ dailyStepGoal: goal });
+          initialCandleName={settings.candleName}
+          onComplete={(goal, candleName) => {
+            const nextPatch: Partial<UserSettings> = {
+              dailyStepGoal: goal,
+              ...(candleName ? { candleName } : {}),
+            };
+            handleUpdateSettings(nextPatch);
             kvSet(KEY_ONBOARDED, '1');
             void SecureStore.setItemAsync(SECURE_ONBOARDED, '1').catch(() => {});
             setOnboarded(true);
-            void scheduleMorningWakeNotification({ ...settings, dailyStepGoal: goal });
+            void scheduleMorningWakeNotification({ ...settings, ...nextPatch });
             void syncHealthKit();
           }}
         />
@@ -1063,6 +1079,7 @@ function WickRoot() {
     storageService.saveSnapshot(freshSnapshot, now.getTime());
     reloadNativeWidgets();
     setActiveTab('flame');
+    setShowMoodModal(false);
     setOnboarded(false);
     showToast('All local data reset.');
   };
@@ -1160,6 +1177,7 @@ function WickRoot() {
           waxGrams={snapshot.waxGrams}
           todaySteps={snapshot.stepsToday}
           dailyStepGoal={settings.dailyStepGoal}
+          candleName={settings.candleName}
           theme={theme}
           entitlement={{
             ...entitlement,
@@ -1269,6 +1287,52 @@ function WickRoot() {
         onClose={() => setPaywallReason(null)}
       />
 
+      <Modal
+        visible={showMoodModal && snapshot.state === 'NIGHT_SLEEP'}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowMoodModal(false)}
+      >
+        <View style={styles.moodBackdrop}>
+          <View style={styles.moodSheet}>
+            <Text style={styles.moodTitle}>
+              Goodnight{settings.candleName?.trim() ? `, ${settings.candleName.trim()}` : ''}
+            </Text>
+            <Text style={styles.moodSub}>
+              How did today feel? Your mood tints tonight&apos;s wax band.
+            </Text>
+            <View style={styles.moodGrid}>
+              {MOOD_LIST.map((mood) => (
+                <Pressable
+                  key={mood}
+                  style={styles.moodChip}
+                  onPress={() => {
+                    const todayKey = getLocalDateKey(new Date());
+                    setSnapshot((prev) => {
+                      if (prev.dateKey !== todayKey) {
+                        return prev;
+                      }
+                      const next = { ...prev, mood, updatedAt: Date.now() };
+                      storageService.saveSnapshot(next, Date.now());
+                      void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(next));
+                      return next;
+                    });
+                    setShowMoodModal(false);
+                    showToast(`Saved "${mood}" to tonight's wax band.`);
+                  }}
+                >
+                  <View style={[styles.moodDot, { backgroundColor: CANDLE_MOOD_COLORS[mood] }]} />
+                  <Text style={styles.moodChipText}>{mood}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Pressable style={styles.moodSkipBtn} onPress={() => setShowMoodModal(false)}>
+              <Text style={styles.moodSkipText}>Skip</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       {(tabsVisible || activeTab !== 'flame') && (
         <View style={styles.tabBarWrap}>
           <BlurView intensity={40} tint="dark" style={styles.tabBar}>
@@ -1363,4 +1427,33 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  moodBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.72)',
+    justifyContent: 'flex-end',
+  },
+  moodSheet: {
+    backgroundColor: '#121216',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    paddingBottom: 40,
+    gap: 14,
+  },
+  moodTitle: { color: '#F5F5F7', fontSize: 22, fontWeight: '700' },
+  moodSub: { color: '#A1A1AA', fontSize: 14, lineHeight: 20 },
+  moodGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  moodChip: {
+    width: '48%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 14,
+    padding: 14,
+  },
+  moodDot: { width: 12, height: 12, borderRadius: 6 },
+  moodChipText: { color: '#F5F5F7', fontSize: 14, fontWeight: '600' },
+  moodSkipBtn: { alignItems: 'center', paddingVertical: 8 },
+  moodSkipText: { color: '#A1A1AA', fontSize: 14 },
 });

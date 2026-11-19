@@ -17,6 +17,7 @@ interface WaxLedgerScreenProps {
   waxGrams: number;
   todaySteps?: number;
   dailyStepGoal?: number;
+  candleName?: string;
   theme: WickTheme;
   entitlement: EntitlementState;
   onExportPdf: () => void;
@@ -29,6 +30,7 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
   waxGrams,
   todaySteps = 0,
   dailyStepGoal = 8000,
+  candleName,
   theme,
   entitlement,
   onExportPdf,
@@ -44,7 +46,9 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
     <ScrollView style={styles.root} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
         <View>
-          <Text style={[styles.title, { color: theme.primaryText }]}>Wax Ledger</Text>
+          <Text style={[styles.title, { color: theme.primaryText }]}>
+            {candleName?.trim() ? `${candleName.trim()} • Wax Ledger` : 'Wax Ledger'}
+          </Text>
           <Text style={styles.subtitle}>
             {streakDays} day streak • {waxGrams}g wax earned
           </Text>
@@ -130,7 +134,9 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
           <View key={layer.id} style={styles.layerRow}>
             <View style={[styles.swatch, { backgroundColor: layer.colorHex }]} />
             <View style={styles.layerInfo}>
-              <Text style={[styles.layerDate, { color: theme.primaryText }]}>{layer.date}</Text>
+              <Text style={[styles.layerDate, { color: theme.primaryText }]}>
+                {layer.mood ? `${layer.date} • ${layer.mood}` : layer.date}
+              </Text>
               <Text style={styles.layerMeta}>
                 {layer.stepsAchieved.toLocaleString('en-US')} /{' '}
                 {layer.stepGoal.toLocaleString('en-US')} steps

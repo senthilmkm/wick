@@ -156,6 +156,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
           lanternMode={settings.lanternModeEnabled}
           goalMet={goalMet}
           sedentaryDraft={isSedentaryDraft}
+          candleName={settings.candleName}
         />
       </Pressable>
 

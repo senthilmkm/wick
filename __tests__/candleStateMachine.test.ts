@@ -295,4 +295,25 @@ describe('candleStateMachine & regression lifecycle', () => {
     });
     expect(earlyDying.snapshot.state).toBe('DYING_EMBER');
   });
+
+  it('tints completed wax layer with nightly mood and clears mood on next day', () => {
+    const night = new Date(2026, 10, 18, 22, 45);
+    const snap = {
+      ...createMorningSnapshot('2026-11-18', night.getTime(), 2, 100, 0),
+      state: 'NIGHT_SLEEP' as const,
+      stepsToday: 8000,
+      ignitedAt: night.getTime() - 3600000,
+      mood: 'Grateful' as const,
+    };
+    const nextMorning = new Date(2026, 10, 19, 7, 5);
+    const rollover = evaluateCandleState({
+      snapshot: snap,
+      stepsToday: 0,
+      settings,
+      now: nextMorning,
+    });
+    expect(rollover.completedDayLayer?.mood).toBe('Grateful');
+    expect(rollover.completedDayLayer?.colorHex).toBe('#F4B942');
+    expect(rollover.snapshot.mood).toBeUndefined();
+  });
 });

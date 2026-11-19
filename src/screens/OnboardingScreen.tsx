@@ -1,16 +1,21 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+
+const NAME_PRESETS = ['Solace', 'Hearth', 'Ember', 'Dawn'];
 
 interface OnboardingScreenProps {
   initialGoal: number;
-  onComplete: (dailyStepGoal: number) => void;
+  initialCandleName?: string;
+  onComplete: (dailyStepGoal: number, candleName?: string) => void;
 }
 
 export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
   initialGoal,
+  initialCandleName = '',
   onComplete,
 }) => {
   const [goal, setGoal] = useState(initialGoal);
+  const [candleName, setCandleName] = useState(initialCandleName);
 
   return (
     <View style={styles.root}>
@@ -49,7 +54,32 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
             <Text style={styles.stepBtnText}>+</Text>
           </Pressable>
         </View>
-        <Pressable style={styles.primaryBtn} onPress={() => onComplete(goal)}>
+        <TextInput
+          style={styles.nameInput}
+          value={candleName}
+          onChangeText={(t) => setCandleName(t.slice(0, 12))}
+          placeholder="Name your candle (optional)"
+          placeholderTextColor="#71717A"
+          maxLength={12}
+          returnKeyType="done"
+        />
+        <View style={styles.presetRow}>
+          {NAME_PRESETS.map((preset) => (
+            <Pressable
+              key={preset}
+              style={[styles.presetBtn, candleName === preset && styles.presetBtnActive]}
+              onPress={() => setCandleName(preset)}
+            >
+              <Text style={[styles.presetText, candleName === preset && styles.presetTextActive]}>
+                {preset}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        <Pressable
+          style={styles.primaryBtn}
+          onPress={() => onComplete(goal, candleName.trim() || undefined)}
+        >
           <Text style={styles.primaryText}>Light My Candle</Text>
         </Pressable>
       </View>
@@ -125,6 +155,15 @@ const styles = StyleSheet.create({
   },
   stepBtnText: { color: '#F5F5F7', fontSize: 20, fontWeight: '700' },
   goalNum: { color: '#FF9F43', fontSize: 18, fontWeight: '700' },
+  nameInput: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    color: '#F5F5F7',
+    fontSize: 14,
+    textAlign: 'center',
+  },
   primaryBtn: {
     backgroundColor: '#FF9F43',
     paddingVertical: 16,

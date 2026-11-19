@@ -9,6 +9,7 @@ import {
   getFlameColorHex,
   getLocalDateKey,
   getLocalWeekKey,
+  getMoodWaxColorHex,
   isNighttimeWindow,
   smoothStep,
 } from '../src/engine/candleMath';
@@ -136,5 +137,11 @@ describe('candleMath', () => {
     // Post-midnight 07:00 wake -> 01:00 sleep (bedStart = 00:30)
     expect(isNighttimeWindow(new Date(2026, 10, 19, 22, 45), 7, 0, 1, 0)).toBe(false);
     expect(isNighttimeWindow(new Date(2026, 10, 19, 1, 15), 7, 0, 1, 0)).toBe(true);
+  });
+
+  it('returns distinct wax color hex for every nightly mood', () => {
+    expect(getMoodWaxColorHex('Calm')).toBe('#7FA99B');
+    expect(getMoodWaxColorHex('Grateful')).toBe('#F4B942');
+    expect(getMoodWaxColorHex('Heavy')).toBe('#6D597A');
   });
 });

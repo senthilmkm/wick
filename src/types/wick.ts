@@ -10,6 +10,8 @@ export type CandleState =
   | 'GLASS_DOME'
   | 'EXTINGUISHED';
 
+export type CandleMood = 'Calm' | 'Grateful' | 'Energized' | 'Proud' | 'Tired' | 'Heavy';
+
 export type ThemeId =
   | 'obsidian_night'
   | 'midnight_hearth'
@@ -41,6 +43,7 @@ export interface UserSettings {
   lanternModeEnabled: boolean;
   sleepFocusSyncEnabled: boolean;
   soundEffectsEnabled: boolean;
+  candleName?: string;
 }
 
 export interface WaxLayer {
@@ -51,6 +54,7 @@ export interface WaxLayer {
   stepsAchieved: number;
   stepGoal: number;
   peakIntensity: number;
+  mood?: CandleMood;
 }
 
 export interface CandleSnapshot {
@@ -70,6 +74,7 @@ export interface CandleSnapshot {
   smokingStartSteps: number | null;
   ignitedAt: number | null; // epoch ms
   updatedAt: number; // epoch ms
+  mood?: CandleMood;
 }
 
 export interface FriendCandle {

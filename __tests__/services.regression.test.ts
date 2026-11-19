@@ -260,12 +260,23 @@ describe('themes, storage, motion, audio, export & CloudKit regression tests', (
           stepsAchieved: 9000,
           stepGoal: 8000,
           peakIntensity: 1,
+          mood: 'Calm',
+        },
+        {
+          id: '2',
+          date: '2026-11-17',
+          colorHex: '#FF9E2C',
+          thicknessMm: 3.0,
+          stepsAchieved: 7000,
+          stepGoal: 8000,
+          peakIntensity: 0.8,
         },
       ],
       14,
       '2026-11-18'
     );
     expect(html).toContain('&lt;script&gt;');
+    expect(html).toContain('Calm');
 
     const snap = createMorningSnapshot('2026-11-18', 1000, 14, 0, 0);
     expect(await exporter.shareCandleVideo(snap)).toBe('file:///tmp/wick.mp4');

@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 
@@ -211,6 +212,19 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
         </View>
 
         <View style={styles.row}>
+          <Text style={[styles.rowLabel, { color: theme.primaryText }]}>Candle Name</Text>
+          <TextInput
+            style={styles.nameInput}
+            value={settings.candleName ?? ''}
+            onChangeText={(t) => onUpdateSettings({ candleName: t.slice(0, 12) })}
+            placeholder="e.g. Solace"
+            placeholderTextColor="#71717A"
+            maxLength={12}
+            returnKeyType="done"
+          />
+        </View>
+
+        <View style={styles.row}>
           <Text style={[styles.rowLabel, { color: theme.primaryText }]}>Glass Domes Owned</Text>
           <Text style={[styles.goalVal, { color: theme.accent }]}>{glassDomesOwned}</Text>
         </View>
@@ -318,6 +332,16 @@ const styles = StyleSheet.create({
   },
   stepBtnText: { color: '#F5F5F7', fontSize: 16, fontWeight: '700' },
   goalVal: { fontSize: 15, fontWeight: '700' },
+  nameInput: {
+    minWidth: 120,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    color: '#F5F5F7',
+    fontSize: 14,
+    textAlign: 'right',
+  },
   proBtn: { paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
   proBtnText: { color: '#0A0A0C', fontWeight: '700', fontSize: 15 },
   trialBannerText: { color: '#FF9F43', fontSize: 13, fontWeight: '600', textAlign: 'center' },
