@@ -28,7 +28,7 @@ describe('sparkEngine', () => {
     const token = createSparkToken('spk-1', '  Maya  ', 'dev-a', secret, now);
     expect(token.senderName).toBe('Maya');
     const link = buildSparkUniversalLink(token);
-    expect(link).toContain('https://wick.app/spark/spk-1?t=');
+    expect(link).toContain('https://senthilmkm.github.io/wick/spark.html?t=');
     expect(parseSparkLink(link)).toEqual(token);
     expect(parseSparkLink(`wick://spark/spk-1?foo=1&t=${encodeURIComponent(JSON.stringify(token))}`)).toEqual(token);
     expect(parseSparkLink('https://wick.app/spark/spk-1')).toBeNull();

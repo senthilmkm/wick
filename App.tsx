@@ -94,6 +94,7 @@ const kvSet = (key: string, val: string): void => {
 
 const KEY_ONBOARDED = 'wick.onboarded.v1';
 const KEY_PRO_CACHE = 'wick.pro_cached.v1';
+const KEY_FRIENDS = 'wick.friends.v1';
 const REVENUECAT_IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY;
 
 const storageService = new LocalStorageService(
@@ -165,7 +166,18 @@ function WickRoot() {
 
   const [settings, setSettings] = useState<UserSettings>(() => storageService.loadSettings());
   const [waxLayers, setWaxLayers] = useState<WaxLayer[]>(() => storageService.loadWaxLayers());
-  const [friends] = useState<FriendCandle[]>([]);
+  const [friends, setFriends] = useState<FriendCandle[]>(() => {
+    const raw = kvGet(KEY_FRIENDS);
+    if (!raw) {
+      return [];
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as FriendCandle[]) : [];
+    } catch {
+      return [];
+    }
+  });
   const [activeRescue, setActiveRescue] = useState<ActiveSparkRescue | null>(null);
   const rescueBaselineStepsRef = useRef<number | null>(null);
   const [entitlement, setEntitlement] = useState<EntitlementState>(() => ({
@@ -268,12 +280,43 @@ function WickRoot() {
     };
   }, []);
 
-  // Handle incoming Spark Rescue Universal Links (https://wick.app/spark/... or wick://spark/...)
+  // Handle incoming Spark Rescue & Circle Pair links
   useEffect(() => {
     const handleIncomingUrl = (url: string | null) => {
       if (!url) {
         return;
       }
+      if (url.includes('circle/pair') || url.includes('pair.html')) {
+        const idMatch = /[?&]id=([^&]+)/.exec(url);
+        const nameMatch = /[?&]name=([^&]+)/.exec(url);
+        const streakMatch = /[?&]streak=(\d+)/.exec(url);
+        const friendId = idMatch ? decodeURIComponent(idMatch[1]) : `friend_${Date.now()}`;
+        const displayName = nameMatch ? decodeURIComponent(nameMatch[1]) : 'Friend';
+        const streakDays = streakMatch ? Number(streakMatch[1]) : 1;
+
+        setFriends((prev) => {
+          if (prev.some((f) => f.id === friendId)) {
+            return prev;
+          }
+          const next: FriendCandle[] = [
+            ...prev,
+            {
+              id: friendId,
+              displayName,
+              state: 'BLAZING',
+              flameIntensity: 0.9,
+              streakDays,
+              updatedAt: Date.now(),
+            },
+          ];
+          kvSet(KEY_FRIENDS, JSON.stringify(next));
+          return next;
+        });
+        setActiveTab('circle');
+        showToast(`${displayName} paired to your Circle!`);
+        return;
+      }
+
       const token = parseSparkLink(url);
       if (!token) {
         return;
@@ -447,14 +490,16 @@ function WickRoot() {
       setPaywallReason('friend');
       return;
     }
+    const pairUrl = `https://senthilmkm.github.io/wick/pair.html?id=${encodeURIComponent(
+      `usr_${Date.now()}`
+    )}&name=${encodeURIComponent('Friend')}&streak=${snapshot.streakDays}`;
     try {
       await Share.share({
         title: 'Pair our Wick Candles',
-        message:
-          'Put my live candle on your iPhone Lock Screen with Wick: https://wick.app/circle/pair',
-        url: 'https://wick.app/circle/pair',
+        message: `Join my Wick Circle to keep our candles lit together: ${pairUrl}`,
+        url: pairUrl,
       });
-      showToast('Circle invite link opened.');
+      showToast('Circle invite link shared.');
     } catch {
       showToast('Could not open Share Sheet.');
     }

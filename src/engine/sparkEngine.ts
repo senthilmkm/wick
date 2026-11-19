@@ -44,7 +44,7 @@ export function createSparkToken(
 
 export function buildSparkUniversalLink(token: SparkRequestToken): string {
   const encoded = encodeURIComponent(JSON.stringify(token));
-  return `https://wick.app/spark/${token.sparkId}?t=${encoded}`;
+  return `https://senthilmkm.github.io/wick/spark.html?t=${encoded}`;
 }
 
 /**

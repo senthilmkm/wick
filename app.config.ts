@@ -16,7 +16,7 @@ const config: ExpoConfig = {
   ios: {
     bundleIdentifier: 'com.senthilmkm.wick',
     supportsTablet: false,
-    associatedDomains: ['applinks:wick.app'],
+    associatedDomains: ['applinks:senthilmkm.github.io'],
     config: {
       usesNonExemptEncryption: false,
     },

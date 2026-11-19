@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pair Candles on Wick</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0A0A0C; color: #F5F5F7; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 24px; text-align: center; }
+    .card { max-width: 380px; background: #121216; border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 28px 22px; }
+    .brand { color: #FF9F43; font-weight: 700; font-size: 16px; letter-spacing: 1px; margin-bottom: 12px; }
+    h1 { font-size: 24px; margin: 0 0 10px; }
+    p { color: #A1A1AA; font-size: 14px; line-height: 1.5; margin: 0 0 22px; }
+    .btn { display: block; background: #FF9F43; color: #0A0A0C; font-weight: 700; text-decoration: none; padding: 14px 20px; border-radius: 16px; margin-bottom: 12px; }
+    .sub { color: #A1A1AA; font-size: 13px; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">wick</div>
+    <h1>Pair your candle</h1>
+    <p>Accept this invite to add your friend to your Wick Circle and see their candle status.</p>
+    <a id="openBtn" class="btn" href="wick://circle/pair">Open in Wick</a>
+    <a class="sub" href="https://apps.apple.com/app/id6836596501">Don't have Wick? Get it on the App Store</a>
+  </div>
+  <script>
+    (function () {
+      var qs = window.location.search || '';
+      var deepLink = 'wick://circle/pair' + qs;
+      document.getElementById('openBtn').setAttribute('href', deepLink);
+      window.location.href = deepLink;
+    })();
+  </script>
+</body>
+</html>
