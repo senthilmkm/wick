@@ -220,6 +220,24 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
     return p;
   }, [candleLeft, candleTop, dripFrontLen]);
 
+  // S-curving wispy smoke ribbon for SMOKING_GRACE
+  const smokeRibbonPath = useMemo(() => {
+    const p = Skia.Path.Make();
+    p.moveTo(CX, flameBaseY - 4);
+    p.cubicTo(CX - 14, flameBaseY - 32, CX + 16, flameBaseY - 58, CX - 6, flameBaseY - 92);
+    return p;
+  }, [flameBaseY]);
+
+  // Curved glass specular highlight streak for GLASS_DOME
+  const domeHighlightPath = useMemo(() => {
+    const p = Skia.Path.Make();
+    const x = CX - 66;
+    const topY = candleTop - 92;
+    p.moveTo(x + 12, topY);
+    p.quadTo(x, topY + 70, x + 4, candleBottom - 16);
+    return p;
+  }, [candleTop, candleBottom]);
+
   const flameTransform = useDerivedValue(() => [
     { translateX: CX },
     { translateY: flameBaseY },
@@ -239,8 +257,13 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
   ]);
 
   const smokeTransform = useDerivedValue(() => [
-    { translateY: -smokeDrift.value * 80 },
-    { scaleX: 1 + smokeDrift.value * 0.85 },
+    { translateY: -smokeDrift.value * 42 },
+    { scaleX: 1 + smokeDrift.value * 0.55 },
+  ]);
+
+  const poolShimmerTransform = useDerivedValue(() => [
+    { translateX: sway.value * 26 + windTilt.value * 6 },
+    { scaleX: 0.92 + breath.value * 0.14 },
   ]);
 
   const visibleLayers = waxLayers.slice(-14);
@@ -377,6 +400,19 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
             ]}
           />
         </Oval>
+        {intensity > 0 && (
+          <Group transform={poolShimmerTransform}>
+            <Oval
+              x={CX - 16}
+              y={candleTop + 1}
+              width={32}
+              height={6}
+              color={isNight ? 'rgba(224,242,254,0.45)' : 'rgba(255,248,220,0.58)'}
+            >
+              <BlurMask blur={2.5} style="normal" />
+            </Oval>
+          </Group>
+        )}
 
         {/* Realistic 3D Raised Melting Wax Drips (Shadow + Glossy Wax + Bead Highlight) */}
         <Group transform={[{ translateX: 1.5 }, { translateY: 2 }]}>
@@ -454,26 +490,60 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
             <SkiaSpark key={i} progress={sparkProgress} cx={CX} baseY={flameBaseY} dx={sp.dx} dy={sp.dy} />
           ))}
 
-        {/* 4. Rising Smoke Wisp in SMOKING_GRACE */}
+        {/* 4. S-Curving Wispy Smoke Trail in SMOKING_GRACE */}
         {snapshot.state === 'SMOKING_GRACE' && (
           <Group transform={smokeTransform}>
-            <Circle cx={CX} cy={flameBaseY - 14} r={10} color="rgba(161,161,170,0.42)">
+            <Path
+              path={smokeRibbonPath}
+              color="rgba(180,180,190,0.48)"
+              style="stroke"
+              strokeWidth={7}
+              strokeCap="round"
+            >
+              <BlurMask blur={6} style="normal" />
+            </Path>
+            <Circle cx={CX - 4} cy={flameBaseY - 26} r={9} color="rgba(161,161,170,0.34)">
               <BlurMask blur={10} style="normal" />
             </Circle>
           </Group>
         )}
 
-        {/* 5. Glass Dome (24h Rest Freeze) */}
+        {/* 5. Glass Dome with Blown-Glass Rim & Specular Reflection (24h Rest Freeze) */}
         {snapshot.state === 'GLASS_DOME' && (
-          <RoundedRect
-            x={CX - 88}
-            y={candleTop - 115}
-            width={176}
-            height={candleHeight + 130}
-            r={88}
-            color="rgba(255,255,255,0.06)"
-            style="fill"
-          />
+          <Group>
+            <RoundedRect
+              x={CX - 88}
+              y={candleTop - 115}
+              width={176}
+              height={candleHeight + 130}
+              r={88}
+              color="rgba(255,255,255,0.06)"
+              style="fill"
+            />
+            <RoundedRect
+              x={CX - 88}
+              y={candleTop - 115}
+              width={176}
+              height={candleHeight + 130}
+              r={88}
+              color="rgba(255,255,255,0.28)"
+              style="stroke"
+              strokeWidth={1.6}
+            />
+            <Path
+              path={domeHighlightPath}
+              style="stroke"
+              strokeWidth={4}
+              strokeCap="round"
+            >
+              <LinearGradient
+                start={vec(CX - 66, candleTop - 92)}
+                end={vec(CX - 62, candleBottom - 16)}
+                colors={['rgba(255,255,255,0.38)', 'rgba(255,255,255,0.12)', 'transparent']}
+              />
+              <BlurMask blur={2} style="normal" />
+            </Path>
+          </Group>
         )}
       </Canvas>
     </View>
