@@ -250,12 +250,16 @@ function WickRoot() {
 
   const applyStepTotal = useCallback(
     (steps: number) => {
+      const now = new Date();
+      const todayKey = getLocalDateKey(now);
       setSnapshot((prev) => {
+        const monotonicSteps =
+          prev.dateKey === todayKey ? Math.max(prev.stepsToday, steps) : steps;
         const res = evaluateCandleState({
           snapshot: prev,
-          stepsToday: steps,
+          stepsToday: monotonicSteps,
           settings,
-          now: new Date(),
+          now,
         });
         void notifySmokingGraceIfNeeded(prev.state, res.snapshot.state);
         if (res.completedDayLayer) {
@@ -293,10 +297,13 @@ function WickRoot() {
     if (steps === null) {
       return;
     }
-    hkBaselineStepsRef.current = steps;
-    pedometerSessionOffsetRef.current = 0;
-    applyStepTotal(steps);
-  }, [applyStepTotal]);
+    const todayKey = getLocalDateKey(new Date());
+    if (snapshot.dateKey !== todayKey || steps >= hkBaselineStepsRef.current) {
+      hkBaselineStepsRef.current = steps;
+      pedometerSessionOffsetRef.current = 0;
+    }
+    applyStepTotal(Math.max(steps, hkBaselineStepsRef.current));
+  }, [applyStepTotal, snapshot.dateKey]);
 
   // Initialize Keychain anti-abuse state, durable onboarding/settings fallback, and billing on mount
   useEffect(() => {
