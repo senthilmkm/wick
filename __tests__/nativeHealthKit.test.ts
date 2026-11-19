@@ -47,6 +47,7 @@ describe('nativeHealthKit', () => {
     mockIsHealthDataAvailable.mockResolvedValueOnce(false);
     expect(await fetchTodayHealthKitSteps()).toBeNull();
 
+    resetHealthKitSessionCache();
     mockIsHealthDataAvailable.mockRejectedValueOnce(new Error('not supported'));
     expect(await fetchTodayHealthKitSteps()).toBeNull();
   });
