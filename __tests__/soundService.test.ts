@@ -44,6 +44,7 @@ describe('soundService', () => {
     });
     statusCb!({ isLoaded: false });
     expect(mockUnload).not.toHaveBeenCalled();
+    mockUnload.mockRejectedValueOnce(new Error('unload err'));
     statusCb!({ isLoaded: true, didJustFinish: true });
     expect(mockUnload).toHaveBeenCalledTimes(1);
   });
