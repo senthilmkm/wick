@@ -629,6 +629,12 @@ function WickRoot() {
       return;
     }
 
+    // Avoid dual Audio.Recording race condition when liveBreezeEnabled already holds the mic
+    if (settings.liveBreezeEnabled && activeTab === 'flame') {
+      showToast('Blow into your mic now to extinguish...');
+      return;
+    }
+
     let recording: Audio.Recording | null = null;
     const detector = new AudioBlowDetector({
       setAmbientMixMode: async () => {

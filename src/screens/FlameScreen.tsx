@@ -1,5 +1,5 @@
 import { Canvas, LinearGradient, RoundedRect, Circle, vec } from '@shopify/react-native-skia';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Candle3DCanvas } from '../components/Candle3DCanvas';
 import { InfoModal } from '../components/InfoModal';
@@ -42,6 +42,12 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
   const [showPacePill, setShowPacePill] = useState(false);
   const [showActionsSheet, setShowActionsSheet] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
+  const [, setMinuteTick] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => setMinuteTick((t) => t + 1), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   const needsSpark =
     snapshot.state === 'FLICKERING' ||
