@@ -21,6 +21,7 @@ const config: ExpoConfig = {
   userInterfaceStyle: 'dark',
   ios: {
     bundleIdentifier: 'com.senthilmkm.wick',
+    appleTeamId: '2KJK6895B3',
     supportsTablet: false,
     associatedDomains: ['applinks:senthilmkm.github.io'],
     config: {
