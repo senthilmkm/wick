@@ -34,6 +34,7 @@ import {
   canUseGlassDome,
   canUseTheme,
   hasProAccess,
+  isInReverseTrial,
   recordVideoExport,
 } from './src/engine/trialGuard';
 import { CircleScreen } from './src/screens/CircleScreen';
@@ -1026,6 +1027,8 @@ function WickRoot() {
             ...entitlement,
             isPro: hasProAccess(entitlement, Date.now()),
           }}
+          isPaidPro={entitlement.isPro}
+          isReverseTrialActive={isInReverseTrial(entitlement, Date.now())}
           glassDomesOwned={snapshot.glassDomesOwned}
           onSelectTheme={(themeId: ThemeId) => {
             if (!canUseTheme(entitlement, themeId, Date.now())) {

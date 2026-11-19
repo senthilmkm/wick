@@ -8,6 +8,8 @@ interface SanctuaryScreenProps {
   settings: UserSettings;
   theme: WickTheme;
   entitlement: EntitlementState;
+  isPaidPro?: boolean;
+  isReverseTrialActive?: boolean;
   glassDomesOwned: number;
   onSelectTheme: (themeId: ThemeId) => void;
   onUpdateSettings: (partial: Partial<UserSettings>) => void;
@@ -20,6 +22,8 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
   settings,
   theme,
   entitlement,
+  isPaidPro = entitlement.isPro,
+  isReverseTrialActive = false,
   glassDomesOwned,
   onSelectTheme,
   onUpdateSettings,
@@ -199,7 +203,12 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
 
       {/* Wick Pro & Restore */}
       <View style={styles.card}>
-        {!entitlement.isPro && (
+        {isReverseTrialActive && !isPaidPro && (
+          <Text style={styles.trialBannerText}>
+            3-Day Full Access Active • Unlock forever with Wick Pro
+          </Text>
+        )}
+        {!isPaidPro && (
           <Pressable
             style={[styles.proBtn, { backgroundColor: theme.accent }]}
             onPress={onUpgradePro}
@@ -277,6 +286,7 @@ const styles = StyleSheet.create({
   goalVal: { fontSize: 15, fontWeight: '700' },
   proBtn: { paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
   proBtnText: { color: '#0A0A0C', fontWeight: '700', fontSize: 15 },
+  trialBannerText: { color: '#FF9F43', fontSize: 13, fontWeight: '600', textAlign: 'center' },
   restoreBtn: { alignItems: 'center', paddingVertical: 6 },
   restoreText: { color: '#A1A1AA', fontSize: 13 },
   version: { color: '#71717A', textAlign: 'center', fontSize: 12, marginTop: 8 },
