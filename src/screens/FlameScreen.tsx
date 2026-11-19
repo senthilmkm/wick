@@ -13,6 +13,7 @@ interface FlameScreenProps {
   waxLayers: WaxLayer[];
   resumeTick?: number;
   windIntensity?: number;
+  tiltAngle?: number;
   statusMessage?: string | null;
   onStrikeLighter: () => void;
   onShareVideo: () => void;
@@ -30,6 +31,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
   waxLayers,
   resumeTick,
   windIntensity = 0,
+  tiltAngle = 0,
   statusMessage,
   onStrikeLighter,
   onShareVideo,
@@ -113,6 +115,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
           waxLayers={waxLayers}
           resumeTick={resumeTick}
           windIntensity={windIntensity}
+          tiltAngle={tiltAngle}
           lanternMode={settings.lanternModeEnabled}
         />
       </Pressable>

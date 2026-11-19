@@ -31,6 +31,7 @@ interface Candle3DCanvasProps {
   waxLayers: WaxLayer[];
   resumeTick?: number;
   windIntensity?: number;
+  tiltAngle?: number;
   lanternMode?: boolean;
 }
 
@@ -77,11 +78,13 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
   waxLayers,
   resumeTick = 0,
   windIntensity = 0,
+  tiltAngle = 0,
   lanternMode = false,
 }) => {
   const breath = useSharedValue(1);
   const sway = useSharedValue(0);
   const windTilt = useSharedValue(0);
+  const gravityTilt = useSharedValue(0);
   const bloom = useSharedValue(1);
   const sparkProgress = useSharedValue(0);
   const smokeDrift = useSharedValue(0);
@@ -89,6 +92,10 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
   useEffect(() => {
     windTilt.value = withSpring(windIntensity, { damping: 10, stiffness: 220 });
   }, [windIntensity, windTilt]);
+
+  useEffect(() => {
+    gravityTilt.value = withSpring(tiltAngle, { damping: 14, stiffness: 160 });
+  }, [tiltAngle, gravityTilt]);
 
   useEffect(() => {
     const anxious = snapshot.state === 'FLICKERING' || snapshot.state === 'DYING_EMBER';
@@ -241,7 +248,7 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
   const flameTransform = useDerivedValue(() => [
     { translateX: CX },
     { translateY: flameBaseY },
-    { rotate: sway.value + windTilt.value * 0.38 },
+    { rotate: sway.value + windTilt.value * 0.38 + gravityTilt.value },
     { scaleX: (1 + (1 - breath.value) * 0.25 + windTilt.value * 0.2) * bloom.value },
     { scaleY: Math.max(0.45, breath.value * bloom.value * (1 - windTilt.value * 0.35)) },
     { translateX: -CX },

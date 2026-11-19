@@ -143,6 +143,16 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
 
         <View style={styles.row}>
           <Text style={[styles.rowLabel, { color: theme.primaryText }]}>
+            Sound Effects (Match Strike)
+          </Text>
+          <Switch
+            value={settings.soundEffectsEnabled}
+            onValueChange={(val) => onUpdateSettings({ soundEffectsEnabled: val })}
+          />
+        </View>
+
+        <View style={styles.row}>
+          <Text style={[styles.rowLabel, { color: theme.primaryText }]}>
             Lantern Mode (100% Glow)
           </Text>
           <Switch

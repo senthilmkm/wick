@@ -62,7 +62,9 @@ import {
   notifySmokingGraceIfNeeded,
   scheduleMorningWakeNotification,
 } from './src/services/notificationService';
+import { playMatchStrikeSound } from './src/services/soundService';
 import { DEFAULT_SETTINGS, LocalStorageService } from './src/services/storageService';
+import { subscribeToTiltAngle } from './src/services/tiltService';
 import {
   ActiveSparkRescue,
   CandleSnapshot,
@@ -175,6 +177,7 @@ function WickRoot() {
   const [paywallReason, setPaywallReason] = useState<PaywallReason | null>(null);
   const [resumeTick, setResumeTick] = useState(0);
   const [windIntensity, setWindIntensity] = useState(0);
+  const [tiltAngle, setTiltAngle] = useState(0);
   const previousBrightnessRef = useRef<number | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -457,6 +460,34 @@ function WickRoot() {
       clearInterval(poll);
     };
   }, [onboarded, syncHealthKit, applyStepTotal]);
+
+  // iPhone tilt gravity sway while Flame screen is open and candle is lit
+  useEffect(() => {
+    if (!hydrated || !onboarded || activeTab !== 'flame' || snapshot.flameIntensity <= 0) {
+      setTiltAngle(0);
+      return;
+    }
+    let active = true;
+    let unsubTilt: (() => void) | null = null;
+    void subscribeToTiltAngle((rad) => {
+      if (active) {
+        setTiltAngle(rad);
+      }
+    }).then((unsub) => {
+      if (active) {
+        unsubTilt = unsub;
+      } else {
+        unsub();
+      }
+    });
+    return () => {
+      active = false;
+      setTiltAngle(0);
+      if (unsubTilt) {
+        unsubTilt();
+      }
+    };
+  }, [hydrated, onboarded, activeTab, snapshot.flameIntensity > 0]);
 
   // Lantern Mode: boost screen brightness to 100% on Flame tab when lit, restore on exit
   useEffect(() => {
@@ -834,8 +865,10 @@ function WickRoot() {
           waxLayers={waxLayers}
           resumeTick={resumeTick}
           windIntensity={windIntensity}
+          tiltAngle={tiltAngle}
           onStrikeLighter={() => {
-            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            void playMatchStrikeSound(settings.soundEffectsEnabled);
             setSnapshot((prev) => {
               const next = igniteWithLighter(prev, Date.now());
               storageService.saveSnapshot(next, Date.now());
