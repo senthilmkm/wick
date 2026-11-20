@@ -6,24 +6,24 @@ import { ActiveSparkRescue, FriendCandle, WickTheme } from '../types/wick';
 
 const PAIR_STEPS = [
   {
-    step: '1. Sign in to iCloud',
+    step: '1. Sign in to iCloud (Both Phones)',
     body: 'Make sure both you and your friend are signed in to iCloud in iPhone Settings.',
   },
   {
-    step: '2. Send an Invite',
-    body: 'Tap "+ Pair Widget" and send the link to your friend via Messages or AirDrop.',
+    step: '2. Send Your Invite',
+    body: 'Tap "+ Pair Widget" and text your link to your friend via Messages or AirDrop.',
   },
   {
-    step: '3. Friend Taps the Link',
-    body: 'When they open the link, their iPhone opens Wick and pairs their candle to your Circle.',
+    step: '3. Pair Both Ways',
+    body: 'When your friend taps your link, they see your candle. Have them tap "+ Pair Widget" and send their link back so you see theirs too!',
   },
   {
     step: '4. Add the Lock Screen Widget',
-    body: 'Long-press your iPhone Lock Screen -> Customize -> Add Widgets -> Wick to see live candle status.',
+    body: 'Long-press your iPhone Lock Screen -> Customize -> Add Widgets -> Wick to watch your candle live.',
   },
   {
-    step: '5. Send a Spark Rescue',
-    body: 'If a friend’s flame is fading, tap "Spark" and walk 500 steps to help reignite their candle.',
+    step: '5. Nudge & Spark Rescue (500 Steps)',
+    body: 'Tap "Nudge" anytime to cheer a friend on. If their candle is fading, they tap "Send Spark" and text you the link — once you walk 500 steps, Wick sends those steps via iCloud and automatically reignites their candle!',
   },
 ];
 
