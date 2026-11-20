@@ -99,7 +99,7 @@ export function computeDayProgress(
  * while still encouraging periodic afternoon movement.
  */
 export function computeExpectedSteps(dailyStepGoal: number, tNorm: number): number {
-  const safeGoal = Math.max(500, Math.round(dailyStepGoal));
+  const safeGoal = Number.isFinite(dailyStepGoal) ? Math.max(500, Math.round(dailyStepGoal)) : 8000;
   const t = clamp(tNorm, 0, 1);
   const curve = 0.85 * smoothStep(t) + 0.15 * t;
   // Minimum floor of 50 steps once awake so division by expectedSteps is always stable
@@ -114,12 +114,13 @@ export function computePaceRatio(
   expectedStepsNow: number,
   dailyStepGoal: number
 ): number {
-  const safeSteps = Math.max(0, stepsToday);
-  const safeGoal = Math.max(500, dailyStepGoal);
+  const safeSteps = Number.isFinite(stepsToday) ? Math.max(0, stepsToday) : 0;
+  const safeGoal = Number.isFinite(dailyStepGoal) ? Math.max(500, dailyStepGoal) : 8000;
+  const safeExpected = Number.isFinite(expectedStepsNow) ? Math.max(50, expectedStepsNow) : 50;
   if (safeSteps >= safeGoal) {
     return Math.max(1.2, safeSteps / safeGoal);
   }
-  return safeSteps / Math.max(50, expectedStepsNow);
+  return safeSteps / safeExpected;
 }
 
 /**
@@ -180,7 +181,9 @@ export function deriveWaxLayerSpec(
   stepsAchieved: number,
   stepGoal: number
 ): { colorHex: string; thicknessMm: number; waxGramsEarned: number } {
-  const ratio = Math.max(0, stepsAchieved) / Math.max(500, stepGoal);
+  const safeSteps = Number.isFinite(stepsAchieved) ? Math.max(0, stepsAchieved) : 0;
+  const safeGoal = Number.isFinite(stepGoal) ? Math.max(500, stepGoal) : 8000;
+  const ratio = safeSteps / safeGoal;
   if (ratio >= 1.1) {
     return { colorHex: '#FFB703', thicknessMm: 4.5, waxGramsEarned: 120 };
   }

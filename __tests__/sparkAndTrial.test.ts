@@ -120,5 +120,10 @@ describe('trialGuard & anti-reinstall protection', () => {
     expect(canExportVideo(proEnt, day1)).toBe(true);
     expect(canExportPdf(proEnt)).toBe(true);
     expect(getVisibleLedgerLimit(proEnt)).toBe(Number.MAX_SAFE_INTEGER);
+
+    // Non-finite step progress defaults safely to 0
+    const token = createSparkToken('spk-nan', 'Maya', 'dev-2', 'sec', 1000);
+    const rescue = startSparkRescue(token);
+    expect(updateSparkRescueProgress(rescue, Number.NaN, 2000).stepsWalked).toBe(0);
   });
 });

@@ -183,5 +183,10 @@ describe('candleMath', () => {
     const emptyRecap = buildWeeklyRecapSummary([], 0, 8000, '2026-11-19');
     expect(emptyRecap.daysLit).toBe(0);
     expect(emptyRecap.topMood).toBeNull();
+
+    // Non-finite math inputs are sanitized cleanly
+    expect(computeExpectedSteps(Number.NaN, 0.5)).toBe(computeExpectedSteps(8000, 0.5));
+    expect(computePaceRatio(Number.NaN, Number.NaN, Number.NaN)).toBe(0);
+    expect(deriveWaxLayerSpec(Number.NaN, Number.NaN).waxGramsEarned).toBe(35);
   });
 });

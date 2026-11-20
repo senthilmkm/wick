@@ -118,7 +118,8 @@ export function updateSparkRescueProgress(
   if (rescue.completed || nowMs > rescue.expiresAt) {
     return rescue;
   }
-  const clampedSteps = Math.max(0, Math.min(rescue.stepsRequired, Math.round(stepsWalked)));
+  const safeWalked = Number.isFinite(stepsWalked) ? Math.max(0, Math.round(stepsWalked)) : 0;
+  const clampedSteps = Math.min(rescue.stepsRequired, safeWalked);
   return {
     ...rescue,
     stepsWalked: clampedSteps,

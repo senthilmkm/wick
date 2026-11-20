@@ -244,6 +244,8 @@ function WickRoot() {
   });
   const [activeRescue, setActiveRescue] = useState<ActiveSparkRescue | null>(null);
   const rescueBaselineStepsRef = useRef<number | null>(null);
+  const rescueBaselineDateKeyRef = useRef<string | null>(null);
+  const rescueCarryoverStepsRef = useRef<number>(0);
   const hkBaselineStepsRef = useRef<number>(0);
   const pedometerSessionOffsetRef = useRef<number>(0);
   const [entitlement, setEntitlement] = useState<EntitlementState>(() => ({
@@ -296,8 +298,12 @@ function WickRoot() {
 
   useEffect(() => {
     if (activeRescue?.completed && completedSparkSubmittedRef.current !== activeRescue.sparkId) {
-      completedSparkSubmittedRef.current = activeRescue.sparkId;
-      void completeNativeSparkShare(activeRescue.sparkId, activeRescue.stepsWalked);
+      const { sparkId, stepsWalked } = activeRescue;
+      void completeNativeSparkShare(sparkId, stepsWalked).then((ok) => {
+        if (ok) {
+          completedSparkSubmittedRef.current = sparkId;
+        }
+      });
     }
   }, [activeRescue?.completed, activeRescue?.sparkId, activeRescue?.stepsWalked]);
 
@@ -359,9 +365,19 @@ function WickRoot() {
         }
         if (rescueBaselineStepsRef.current === null) {
           rescueBaselineStepsRef.current = steps;
+          rescueBaselineDateKeyRef.current = todayKey;
+          rescueCarryoverStepsRef.current = prevRescue.stepsWalked;
+        } else if (
+          rescueBaselineDateKeyRef.current !== null &&
+          rescueBaselineDateKeyRef.current !== todayKey
+        ) {
+          rescueCarryoverStepsRef.current = prevRescue.stepsWalked;
+          rescueBaselineStepsRef.current = 0;
+          rescueBaselineDateKeyRef.current = todayKey;
         }
-        const walked = Math.max(0, steps - rescueBaselineStepsRef.current);
-        const updated = updateSparkRescueProgress(prevRescue, walked, Date.now());
+        const walkedToday = Math.max(0, steps - rescueBaselineStepsRef.current);
+        const totalWalked = rescueCarryoverStepsRef.current + walkedToday;
+        const updated = updateSparkRescueProgress(prevRescue, totalWalked, Date.now());
         if (updated.completed && !prevRescue.completed) {
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           showToast(`500 steps done! ${updated.senderName}'s wick is reignited!`);
@@ -520,6 +536,8 @@ function WickRoot() {
             }
             const senderName = res.senderName ?? 'Friend';
             rescueBaselineStepsRef.current = stepsTodayRef.current;
+            rescueBaselineDateKeyRef.current = snapshotDateKeyRef.current || getLocalDateKey(new Date());
+            rescueCarryoverStepsRef.current = 0;
             setActiveRescue({
               sparkId: res.sparkId,
               senderName,
@@ -604,6 +622,8 @@ function WickRoot() {
         return;
       }
       rescueBaselineStepsRef.current = stepsTodayRef.current;
+      rescueBaselineDateKeyRef.current = snapshotDateKeyRef.current || getLocalDateKey(new Date());
+      rescueCarryoverStepsRef.current = 0;
       setActiveRescue(startSparkRescue(token));
       setActiveTab('circle');
       showToast(`Walk 500 steps to rescue ${token.senderName}'s wick!`);
