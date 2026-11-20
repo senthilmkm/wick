@@ -2,6 +2,11 @@ import { requireOptionalNativeModule } from 'expo-modules-core';
 import { FriendCandle } from '../types/wick';
 import { CloudKitDriver } from './cloudKitService';
 
+export interface CompletedSparkRescueInfo {
+  sparkId: string;
+  stepsWalked: number;
+}
+
 export interface SparkShareAcceptanceResult {
   accepted: boolean;
   kind: 'friend' | 'spark' | 'unknown';
@@ -33,7 +38,7 @@ export interface WickNativeSpec {
   ): Promise<string>;
   acceptShareUrlWithKind?(shareUrl: string): Promise<SparkShareAcceptanceResult>;
   completeSparkShareRecord?(sparkId: string, stepsWalked: number): Promise<boolean>;
-  checkPendingSparkRescues?(): Promise<string[]>;
+  checkPendingSparkRescues?(): Promise<CompletedSparkRescueInfo[]>;
 }
 
 function getNativeModule(): WickNativeSpec | null {
@@ -123,7 +128,7 @@ export async function completeNativeSparkShare(
   }
 }
 
-export async function checkNativePendingSparkRescues(): Promise<string[]> {
+export async function checkNativePendingSparkRescues(): Promise<CompletedSparkRescueInfo[]> {
   const mod = getNativeModule();
   if (!mod?.checkPendingSparkRescues) {
     return [];

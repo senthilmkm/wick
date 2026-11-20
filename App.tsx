@@ -347,7 +347,8 @@ function WickRoot() {
         }
         storageService.saveSnapshot(res.snapshot, Date.now());
         void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(res.snapshot)).catch(() => {});
-        void cloudKitService.syncOwnCandleIfNeeded('Friend', res.snapshot, Date.now()).catch(() => {});
+        const ownerLabel = settingsRef.current.candleName?.trim() || 'Friend';
+        void cloudKitService.syncOwnCandleIfNeeded(ownerLabel, res.snapshot, Date.now()).catch(() => {});
         return res.snapshot;
       });
 
@@ -377,10 +378,11 @@ function WickRoot() {
     }
     checkingSparkRescuesRef.current = true;
     try {
-      const completedIds = await checkNativePendingSparkRescues();
-      if (completedIds.length === 0) {
+      const completedRescues = await checkNativePendingSparkRescues();
+      if (completedRescues.length === 0) {
         return;
       }
+      const totalRescuerSteps = completedRescues.reduce((sum, r) => sum + (r.stepsWalked || 500), 0);
       const nowMs = Date.now();
       setSnapshot((prev) => {
         if (prev.state === 'NIGHT_SLEEP' || prev.state === 'GLASS_DOME') {
@@ -392,7 +394,9 @@ function WickRoot() {
         return reignited;
       });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showToast("Your candle was reignited by a friend's Spark!");
+      showToast(
+        `Your candle was reignited! Your friend walked ${totalRescuerSteps.toLocaleString('en-US')} steps.`
+      );
     } finally {
       checkingSparkRescuesRef.current = false;
     }

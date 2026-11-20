@@ -126,7 +126,7 @@ describe('nativeCloudBridge', () => {
         .mockRejectedValueOnce(new Error('complete err')),
       checkPendingSparkRescues: jest
         .fn()
-        .mockResolvedValueOnce(['s1'])
+        .mockResolvedValueOnce([{ sparkId: 's1', stepsWalked: 512 }])
         .mockRejectedValueOnce(new Error('check err')),
     };
     mockRequireOptionalNativeModule.mockReturnValue(fullMod);
@@ -151,7 +151,7 @@ describe('nativeCloudBridge', () => {
     expect(await completeNativeSparkShare('s1', 500)).toBe(true);
     expect(await completeNativeSparkShare('s1', 500)).toBe(false);
 
-    expect(await checkNativePendingSparkRescues()).toEqual(['s1']);
+    expect(await checkNativePendingSparkRescues()).toEqual([{ sparkId: 's1', stepsWalked: 512 }]);
     expect(await checkNativePendingSparkRescues()).toEqual([]);
   });
 });

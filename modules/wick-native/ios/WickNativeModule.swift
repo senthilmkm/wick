@@ -172,7 +172,7 @@ public class WickNativeModule: Module {
               for (recID, matchRes) in payload.matchResults {
                 if case .success(let record) = matchRes {
                   zoneItems.append([
-                    "id": recID.recordName,
+                    "id": "\(recID.zoneID.ownerName):\(recID.recordName)",
                     "displayName": (record["displayName"] as? String) ?? "Friend",
                     "state": (record["state"] as? String) ?? "STEADY",
                     "flameIntensity": (record["flameIntensity"] as? Double) ?? 0.6,
@@ -334,12 +334,16 @@ public class WickNativeModule: Module {
           promise.resolve([])
           return
         }
-        var sparkIds: [String] = []
+        var completedRescues: [[String: Any]] = []
         var toDelete: [CKRecord.ID] = []
         for (recID, matchRes) in payload.matchResults {
           if case .success(let record) = matchRes {
             let sid = (record["sparkId"] as? String) ?? recID.recordName
-            sparkIds.append(sid)
+            let walked = (record["stepsWalked"] as? Int) ?? 500
+            completedRescues.append([
+              "sparkId": sid,
+              "stepsWalked": walked,
+            ])
             toDelete.append(recID)
           }
         }
@@ -349,7 +353,7 @@ public class WickNativeModule: Module {
         }
         let delOp = CKModifyRecordsOperation(recordsToSave: nil, recordIDsToDelete: toDelete)
         delOp.modifyRecordsResultBlock = { _ in
-          promise.resolve(sparkIds)
+          promise.resolve(completedRescues)
         }
         privateDB.add(delOp)
       }
