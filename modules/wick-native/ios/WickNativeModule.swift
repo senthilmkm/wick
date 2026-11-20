@@ -8,6 +8,7 @@ public class WickNativeModule: Module {
   private let containerId = "iCloud.com.senthilmkm.wick"
   private let zoneName = "WickCircleZone"
   private let recordType = "FriendCandleStatus"
+  private let sparkRecordType = "SparkRequest"
   private let recordName = "myCandleStatus"
   private let resultsQueue = DispatchQueue(label: "com.senthilmkm.wick.ckResults")
 
@@ -192,6 +193,165 @@ public class WickNativeModule: Module {
             promise.resolve(results)
           }
         }
+      }
+    }
+
+    AsyncFunction("createSparkShareRecord") {
+      (sparkId: String, senderName: String, stepsRequired: Int, expiresAt: Double, promise: Promise) in
+      let privateDB = self.container.privateCloudDatabase
+      let zone = CKRecordZone(zoneID: self.zoneID)
+      privateDB.save(zone) { _, _ in
+        let recID = CKRecord.ID(recordName: sparkId, zoneID: self.zoneID)
+        let record = CKRecord(recordType: self.sparkRecordType, recordID: recID)
+        record["sparkId"] = sparkId as CKRecordValue
+        record["senderName"] = senderName as CKRecordValue
+        record["status"] = "pending" as CKRecordValue
+        record["stepsWalked"] = 0 as CKRecordValue
+        record["stepsRequired"] = stepsRequired as CKRecordValue
+        record["expiresAt"] = expiresAt as CKRecordValue
+        record["completedAt"] = 0.0 as CKRecordValue
+
+        let share = CKShare(rootRecord: record)
+        share[CKShare.SystemFieldKey.title] = "Save \(senderName)'s Wick" as CKRecordValue
+        share.publicPermission = .readWrite
+
+        var savedShareUrl: String?
+        let op = CKModifyRecordsOperation(recordsToSave: [record, share], recordIDsToDelete: nil)
+        op.perRecordSaveBlock = { _, saveResult in
+          if case .success(let savedRecord) = saveResult, let savedShare = savedRecord as? CKShare {
+            savedShareUrl = savedShare.url?.absoluteString
+          }
+        }
+        op.modifyRecordsResultBlock = { result in
+          switch result {
+          case .success:
+            promise.resolve(savedShareUrl ?? share.url?.absoluteString ?? "")
+          case .failure(let err):
+            promise.reject("CK_SPARK_SHARE_ERR", err.localizedDescription)
+          }
+        }
+        privateDB.add(op)
+      }
+    }
+
+    AsyncFunction("acceptShareUrlWithKind") { (shareUrl: String, promise: Promise) in
+      guard let url = URL(string: shareUrl) else {
+        promise.resolve(["accepted": false, "kind": "unknown"])
+        return
+      }
+      var fetchedMeta: CKShare.Metadata?
+      let metaOp = CKFetchShareMetadataOperation(shareURLs: [url])
+      metaOp.shouldFetchRootRecord = true
+      metaOp.perShareMetadataResultBlock = { _, res in
+        if case .success(let meta) = res {
+          fetchedMeta = meta
+        }
+      }
+      metaOp.fetchShareMetadataResultBlock = { result in
+        guard case .success = result, let metadata = fetchedMeta else {
+          promise.resolve(["accepted": false, "kind": "unknown"])
+          return
+        }
+        let root = metadata.rootRecord
+        let isSpark = root?.recordType == self.sparkRecordType
+        var payload: [String: Any] = [
+          "accepted": true,
+          "kind": isSpark ? "spark" : "friend",
+        ]
+        if isSpark, let root {
+          payload["sparkId"] = (root["sparkId"] as? String) ?? root.recordID.recordName
+          payload["senderName"] = (root["senderName"] as? String) ?? "Friend"
+          payload["stepsRequired"] = (root["stepsRequired"] as? Int) ?? 500
+          payload["expiresAt"] = (root["expiresAt"] as? Double) ?? 0.0
+        }
+        let acceptOp = CKAcceptSharesOperation(shareMetadatas: [metadata])
+        acceptOp.acceptSharesResultBlock = { acceptRes in
+          switch acceptRes {
+          case .success:
+            promise.resolve(payload)
+          case .failure:
+            promise.resolve(["accepted": false, "kind": "unknown"])
+          }
+        }
+        self.container.add(acceptOp)
+      }
+      self.container.add(metaOp)
+    }
+
+    AsyncFunction("completeSparkShareRecord") { (sparkId: String, stepsWalked: Int, promise: Promise) in
+      let sharedDB = self.container.sharedCloudDatabase
+      sharedDB.fetchAllRecordZones { zones, error in
+        guard error == nil, let zones, !zones.isEmpty else {
+          promise.resolve(false)
+          return
+        }
+        let group = DispatchGroup()
+        var updatedAny = false
+        for zone in zones {
+          group.enter()
+          let pred = NSPredicate(format: "sparkId == %@", sparkId)
+          let query = CKQuery(recordType: self.sparkRecordType, predicate: pred)
+          sharedDB.fetch(withQuery: query, inZoneWith: zone.zoneID, desiredKeys: nil, resultsLimit: 5) { res in
+            if case .success(let payload) = res {
+              var toSave: [CKRecord] = []
+              for (_, matchRes) in payload.matchResults {
+                if case .success(let record) = matchRes {
+                  record["status"] = "completed" as CKRecordValue
+                  record["stepsWalked"] = stepsWalked as CKRecordValue
+                  record["completedAt"] = NSNumber(value: Date().timeIntervalSince1970 * 1000)
+                  toSave.append(record)
+                }
+              }
+              if !toSave.isEmpty {
+                let saveOp = CKModifyRecordsOperation(recordsToSave: toSave, recordIDsToDelete: nil)
+                saveOp.modifyRecordsResultBlock = { saveRes in
+                  if case .success = saveRes {
+                    self.resultsQueue.sync { updatedAny = true }
+                  }
+                  group.leave()
+                }
+                sharedDB.add(saveOp)
+                return
+              }
+            }
+            group.leave()
+          }
+        }
+        group.notify(queue: .main) {
+          self.resultsQueue.sync {
+            promise.resolve(updatedAny)
+          }
+        }
+      }
+    }
+
+    AsyncFunction("checkPendingSparkRescues") { (promise: Promise) in
+      let privateDB = self.container.privateCloudDatabase
+      let pred = NSPredicate(format: "status == %@", "completed")
+      let query = CKQuery(recordType: self.sparkRecordType, predicate: pred)
+      privateDB.fetch(withQuery: query, inZoneWith: self.zoneID, desiredKeys: nil, resultsLimit: 20) { res in
+        guard case .success(let payload) = res else {
+          promise.resolve([])
+          return
+        }
+        var sparkIds: [String] = []
+        var toDelete: [CKRecord.ID] = []
+        for (recID, matchRes) in payload.matchResults {
+          if case .success(let record) = matchRes {
+            let sid = (record["sparkId"] as? String) ?? recID.recordName
+            sparkIds.append(sid)
+            toDelete.append(recID)
+          }
+        }
+        if toDelete.isEmpty {
+          promise.resolve([])
+          return
+        }
+        let delOp = CKModifyRecordsOperation(recordsToSave: nil, recordIDsToDelete: toDelete)
+        delOp.modifyRecordsResultBlock = { _ in
+          promise.resolve(sparkIds)
+        }
+        privateDB.add(delOp)
       }
     }
   }

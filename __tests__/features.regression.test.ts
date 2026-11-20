@@ -2,6 +2,7 @@ import {
   activateGlassDome,
   createMorningSnapshot,
   evaluateCandleState,
+  reigniteFromSpark,
   removeGlassDome,
   RESUSCITATION_STEPS_REQUIRED,
   SMOKING_GRACE_DURATION_MS,
@@ -152,5 +153,27 @@ describe('Wick enhancements & bug-fix regression suite', () => {
     expect(skipped.completedDayLayer?.mood).toBe('Proud');
     expect(skipped.snapshot.streakDays).toBe(0);
     expect(skipped.snapshot.mood).toBeUndefined();
+  });
+
+  it('keeps Spark-rescued candle BLAZING during the 2-hour shield even at low pace', () => {
+    const afternoon = new Date(2026, 10, 19, 15, 0);
+    const smoking = {
+      ...createMorningSnapshot('2026-11-19', afternoon.getTime() - 3600000, 3, 50, 0),
+      state: 'SMOKING_GRACE' as const,
+      stepsToday: 100,
+      ignitedAt: afternoon.getTime() - 3600000,
+    };
+    const rescued = reigniteFromSpark(smoking, afternoon.getTime());
+    expect(rescued.state).toBe('BLAZING');
+
+    // Subsequent step evaluation 5 minutes later stays BLAZING under the shield
+    const nextEval = evaluateCandleState({
+      snapshot: rescued,
+      stepsToday: 110,
+      settings: DEFAULT_SETTINGS,
+      now: new Date(afternoon.getTime() + 5 * 60 * 1000),
+    });
+    expect(nextEval.snapshot.state).toBe('BLAZING');
+    expect(nextEval.snapshot.flameIntensity).toBeGreaterThanOrEqual(0.85);
   });
 });

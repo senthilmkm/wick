@@ -59,6 +59,7 @@ export function createMorningSnapshot(
     smokingGraceExpiresAt: null,
     smokingStartSteps: null,
     ignitedAt: null,
+    sparkRescuedUntil: null,
     updatedAt: nowMs,
   };
 }
@@ -258,6 +259,8 @@ export function evaluateCandleState(input: StepEvaluationInput): StepEvaluationR
 
   if (paceRatio >= 1.0) {
     nextState = 'BLAZING';
+  } else if (current.sparkRescuedUntil && nowMs < current.sparkRescuedUntil) {
+    nextState = 'BLAZING';
   } else if (paceRatio >= 0.8 || tNorm === 0) {
     nextState = 'STEADY';
   } else if (paceRatio >= 0.5) {
@@ -278,7 +281,8 @@ export function evaluateCandleState(input: StepEvaluationInput): StepEvaluationR
       stepsToday: safeSteps,
       expectedStepsNow,
       paceRatio,
-      flameIntensity: computeFlameIntensity(nextState, paceRatio),
+      flameIntensity:
+        nextState === 'BLAZING' ? Math.max(0.85, computeFlameIntensity(nextState, paceRatio)) : computeFlameIntensity(nextState, paceRatio),
       flameColorHex: getFlameColorHex(nextState),
       meltProgress: clamp(tNorm * 0.9, 0, 1),
       smokingGraceExpiresAt,
@@ -391,6 +395,8 @@ export function removeGlassDome(snapshot: CandleSnapshot, nowMs: number): Candle
   };
 }
 
+export const SPARK_RESCUE_SHIELD_MS = 2 * 60 * 60 * 1000; // 2 hours
+
 /**
  * Reignites a dying, smoking, or extinguished candle via a friend's 500-step Spark Rescue.
  */
@@ -403,6 +409,7 @@ export function reigniteFromSpark(snapshot: CandleSnapshot, nowMs: number): Cand
     smokingGraceExpiresAt: null,
     smokingStartSteps: null,
     ignitedAt: snapshot.ignitedAt ?? nowMs,
+    sparkRescuedUntil: nowMs + SPARK_RESCUE_SHIELD_MS,
     updatedAt: nowMs,
   };
 }

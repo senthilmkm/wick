@@ -2,6 +2,15 @@ import { requireOptionalNativeModule } from 'expo-modules-core';
 import { FriendCandle } from '../types/wick';
 import { CloudKitDriver } from './cloudKitService';
 
+export interface SparkShareAcceptanceResult {
+  accepted: boolean;
+  kind: 'friend' | 'spark' | 'unknown';
+  sparkId?: string;
+  senderName?: string;
+  stepsRequired?: number;
+  expiresAt?: number;
+}
+
 export interface WickNativeSpec {
   writeWidgetSnapshot(jsonPayload: string): void;
   reloadWidgets(): void;
@@ -16,6 +25,15 @@ export interface WickNativeSpec {
   createFriendShareUrl(): Promise<string>;
   acceptFriendShareUrl(shareUrl: string): Promise<boolean>;
   fetchSharedFriendCandles(): Promise<FriendCandle[]>;
+  createSparkShareRecord?(
+    sparkId: string,
+    senderName: string,
+    stepsRequired: number,
+    expiresAt: number
+  ): Promise<string>;
+  acceptShareUrlWithKind?(shareUrl: string): Promise<SparkShareAcceptanceResult>;
+  completeSparkShareRecord?(sparkId: string, stepsWalked: number): Promise<boolean>;
+  checkPendingSparkRescues?(): Promise<string[]>;
 }
 
 function getNativeModule(): WickNativeSpec | null {
@@ -51,6 +69,69 @@ export async function acceptNativeFriendShareUrl(shareUrl: string): Promise<bool
     return await mod.acceptFriendShareUrl(shareUrl);
   } catch {
     return false;
+  }
+}
+
+export async function createNativeSparkShareUrl(
+  sparkId: string,
+  senderName: string,
+  stepsRequired: number,
+  expiresAt: number
+): Promise<string | null> {
+  const mod = getNativeModule();
+  if (!mod?.createSparkShareRecord) {
+    return null;
+  }
+  try {
+    const url = await mod.createSparkShareRecord(sparkId, senderName, stepsRequired, expiresAt);
+    return url.length > 0 ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function acceptNativeShareUrlWithKind(
+  shareUrl: string
+): Promise<SparkShareAcceptanceResult> {
+  const mod = getNativeModule();
+  if (!mod) {
+    return { accepted: false, kind: 'unknown' };
+  }
+  try {
+    if (mod.acceptShareUrlWithKind) {
+      return await mod.acceptShareUrlWithKind(shareUrl);
+    }
+    const ok = await mod.acceptFriendShareUrl(shareUrl);
+    return { accepted: ok, kind: ok ? 'friend' : 'unknown' };
+  } catch {
+    return { accepted: false, kind: 'unknown' };
+  }
+}
+
+export async function completeNativeSparkShare(
+  sparkId: string,
+  stepsWalked: number
+): Promise<boolean> {
+  const mod = getNativeModule();
+  if (!mod?.completeSparkShareRecord) {
+    return false;
+  }
+  try {
+    return await mod.completeSparkShareRecord(sparkId, stepsWalked);
+  } catch {
+    return false;
+  }
+}
+
+export async function checkNativePendingSparkRescues(): Promise<string[]> {
+  const mod = getNativeModule();
+  if (!mod?.checkPendingSparkRescues) {
+    return [];
+  }
+  try {
+    return await mod.checkPendingSparkRescues();
+  } catch {
+    return [];
   }
 }
 

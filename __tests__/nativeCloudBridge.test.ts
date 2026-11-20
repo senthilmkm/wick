@@ -6,7 +6,11 @@ jest.mock('expo-modules-core', () => ({
 
 import {
   acceptNativeFriendShareUrl,
+  acceptNativeShareUrlWithKind,
+  checkNativePendingSparkRescues,
+  completeNativeSparkShare,
   createNativeCloudKitDriver,
+  createNativeSparkShareUrl,
   reloadNativeWidgets,
   writeNativeWidgetSnapshot,
 } from '../src/services/nativeCloudBridge';
@@ -32,6 +36,13 @@ describe('nativeCloudBridge', () => {
     expect(await driver.createFriendShareUrl()).toBe('');
     expect(await driver.fetchSharedFriendCandles()).toEqual([]);
     expect(await acceptNativeFriendShareUrl('https://www.icloud.com/share/abc')).toBe(false);
+    expect(await createNativeSparkShareUrl('s1', 'Alex', 500, 9999)).toBeNull();
+    expect(await acceptNativeShareUrlWithKind('https://www.icloud.com/share/s1')).toEqual({
+      accepted: false,
+      kind: 'unknown',
+    });
+    expect(await completeNativeSparkShare('s1', 500)).toBe(false);
+    expect(await checkNativePendingSparkRescues()).toEqual([]);
 
     mockRequireOptionalNativeModule.mockImplementation(() => {
       throw new Error('no native');
@@ -78,5 +89,69 @@ describe('nativeCloudBridge', () => {
     expect(await driver.fetchSharedFriendCandles()).toHaveLength(1);
     expect(await acceptNativeFriendShareUrl('https://www.icloud.com/share/abc')).toBe(true);
     expect(await acceptNativeFriendShareUrl('https://www.icloud.com/share/abc')).toBe(false);
+    expect(await createNativeSparkShareUrl('s1', 'Alex', 500, 9999)).toBeNull();
+    mod.acceptFriendShareUrl.mockResolvedValueOnce(false);
+    expect(await acceptNativeShareUrlWithKind('https://www.icloud.com/share/s1')).toEqual({
+      accepted: false,
+      kind: 'unknown',
+    });
+    expect(await completeNativeSparkShare('s1', 500)).toBe(false);
+    expect(await checkNativePendingSparkRescues()).toEqual([]);
+
+    // Fallback when acceptShareUrlWithKind is absent on older native builds
+    mod.acceptFriendShareUrl.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    expect(await acceptNativeShareUrlWithKind('https://www.icloud.com/share/f1')).toEqual({
+      accepted: true,
+      kind: 'friend',
+    });
+    expect(await acceptNativeShareUrlWithKind('https://www.icloud.com/share/f2')).toEqual({
+      accepted: false,
+      kind: 'unknown',
+    });
+
+    const fullMod = {
+      ...mod,
+      createSparkShareRecord: jest
+        .fn()
+        .mockResolvedValueOnce('https://www.icloud.com/share/spark1')
+        .mockResolvedValueOnce('')
+        .mockRejectedValueOnce(new Error('ck spark err')),
+      acceptShareUrlWithKind: jest
+        .fn()
+        .mockResolvedValueOnce({ accepted: true, kind: 'spark', sparkId: 's1', senderName: 'Alex' })
+        .mockRejectedValueOnce(new Error('accept kind err')),
+      completeSparkShareRecord: jest
+        .fn()
+        .mockResolvedValueOnce(true)
+        .mockRejectedValueOnce(new Error('complete err')),
+      checkPendingSparkRescues: jest
+        .fn()
+        .mockResolvedValueOnce(['s1'])
+        .mockRejectedValueOnce(new Error('check err')),
+    };
+    mockRequireOptionalNativeModule.mockReturnValue(fullMod);
+
+    expect(await createNativeSparkShareUrl('s1', 'Alex', 500, 9999)).toBe(
+      'https://www.icloud.com/share/spark1'
+    );
+    expect(await createNativeSparkShareUrl('s1', 'Alex', 500, 9999)).toBeNull();
+    expect(await createNativeSparkShareUrl('s1', 'Alex', 500, 9999)).toBeNull();
+
+    expect(await acceptNativeShareUrlWithKind('https://www.icloud.com/share/spark1')).toEqual({
+      accepted: true,
+      kind: 'spark',
+      sparkId: 's1',
+      senderName: 'Alex',
+    });
+    expect(await acceptNativeShareUrlWithKind('https://www.icloud.com/share/spark1')).toEqual({
+      accepted: false,
+      kind: 'unknown',
+    });
+
+    expect(await completeNativeSparkShare('s1', 500)).toBe(true);
+    expect(await completeNativeSparkShare('s1', 500)).toBe(false);
+
+    expect(await checkNativePendingSparkRescues()).toEqual(['s1']);
+    expect(await checkNativePendingSparkRescues()).toEqual([]);
   });
 });

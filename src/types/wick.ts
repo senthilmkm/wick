@@ -75,6 +75,7 @@ export interface CandleSnapshot {
   smokingStartSteps: number | null;
   ignitedAt: number | null; // epoch ms
   updatedAt: number; // epoch ms
+  sparkRescuedUntil?: number | null; // epoch ms
   mood?: CandleMood;
 }
 

@@ -22,6 +22,7 @@ import {
   createMorningSnapshot,
   evaluateCandleState,
   igniteWithLighter,
+  reigniteFromSpark,
   removeGlassDome,
   triggerNightBlowOut,
 } from './src/engine/candleStateMachine';
@@ -29,7 +30,9 @@ import {
   buildSparkUniversalLink,
   createSparkToken,
   parseSparkLink,
+  SPARK_EXPIRY_MS,
   SPARK_SHARED_APP_SECRET,
+  SPARK_STEPS_REQUIRED,
   startSparkRescue,
   updateSparkRescueProgress,
   validateSparkToken,
@@ -65,8 +68,11 @@ import {
 } from './src/services/lanternService';
 import { buildWaxLedgerPdfHtml } from './src/services/exportService';
 import {
-  acceptNativeFriendShareUrl,
+  acceptNativeShareUrlWithKind,
+  checkNativePendingSparkRescues,
+  completeNativeSparkShare,
   createNativeCloudKitDriver,
+  createNativeSparkShareUrl,
   reloadNativeWidgets,
   writeNativeWidgetSnapshot,
 } from './src/services/nativeCloudBridge';
@@ -219,6 +225,8 @@ function WickRoot() {
   const manualBlowArmedUntilRef = useRef(0);
   const manualBlowActiveRef = useRef(false);
   const goalCelebratedDateRef = useRef<string | null>(null);
+  const completedSparkSubmittedRef = useRef<string | null>(null);
+  const checkingSparkRescuesRef = useRef(false);
 
   const [settings, setSettings] = useState<UserSettings>(() => storageService.loadSettings());
   const [waxLayers, setWaxLayers] = useState<WaxLayer[]>(() => storageService.loadWaxLayers());
@@ -285,6 +293,13 @@ function WickRoot() {
       setShowMoodModal(true);
     }
   }, [snapshot.state, snapshot.mood]);
+
+  useEffect(() => {
+    if (activeRescue?.completed && completedSparkSubmittedRef.current !== activeRescue.sparkId) {
+      completedSparkSubmittedRef.current = activeRescue.sparkId;
+      void completeNativeSparkShare(activeRescue.sparkId, activeRescue.stepsWalked);
+    }
+  }, [activeRescue?.completed, activeRescue?.sparkId, activeRescue?.stepsWalked]);
 
   const showToast = useCallback((msg: string) => {
     setStatusMessage(msg);
@@ -355,6 +370,33 @@ function WickRoot() {
     },
     [showToast]
   );
+
+  const syncPendingSparkRescues = useCallback(async () => {
+    if (checkingSparkRescuesRef.current) {
+      return;
+    }
+    checkingSparkRescuesRef.current = true;
+    try {
+      const completedIds = await checkNativePendingSparkRescues();
+      if (completedIds.length === 0) {
+        return;
+      }
+      const nowMs = Date.now();
+      setSnapshot((prev) => {
+        if (prev.state === 'NIGHT_SLEEP' || prev.state === 'GLASS_DOME') {
+          return prev;
+        }
+        const reignited = reigniteFromSpark(prev, nowMs);
+        storageService.saveSnapshot(reignited, nowMs);
+        void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(reignited)).catch(() => {});
+        return reignited;
+      });
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showToast("Your candle was reignited by a friend's Spark!");
+    } finally {
+      checkingSparkRescuesRef.current = false;
+    }
+  }, [showToast]);
 
   const syncHealthKit = useCallback(async () => {
     const steps = await fetchTodayHealthKitSteps();
@@ -462,22 +504,53 @@ function WickRoot() {
         return;
       }
       if (url.includes('icloud.com/share')) {
-        if (!canAddFriend(entitlementRef.current, friendsRef.current.length, Date.now())) {
-          setActiveTab('circle');
-          setPaywallReason('friend');
-          return;
-        }
-        void acceptNativeFriendShareUrl(url).then((accepted) => {
-          if (accepted) {
-            void cloudKitService.refreshFriendCandles().then((remoteFriends) => {
-              if (remoteFriends.length > 0) {
-                setFriends(remoteFriends);
-                kvSet(KEY_FRIENDS, JSON.stringify(remoteFriends));
-              }
+        void acceptNativeShareUrlWithKind(url).then((res) => {
+          if (!res.accepted) {
+            return;
+          }
+          if (res.kind === 'spark' && res.sparkId) {
+            const exp = res.expiresAt && res.expiresAt > 0 ? res.expiresAt : Date.now() + SPARK_EXPIRY_MS;
+            if (Date.now() > exp) {
+              showToast('This Spark Request has expired.');
+              return;
+            }
+            const senderName = res.senderName ?? 'Friend';
+            rescueBaselineStepsRef.current = stepsTodayRef.current;
+            setActiveRescue({
+              sparkId: res.sparkId,
+              senderName,
+              stepsWalked: 0,
+              stepsRequired: res.stepsRequired ?? SPARK_STEPS_REQUIRED,
+              expiresAt: exp,
+              completed: false,
             });
             setActiveTab('circle');
-            showToast('Friend paired via iCloud!');
+            showToast(`Walk ${res.stepsRequired ?? SPARK_STEPS_REQUIRED} steps to rescue ${senderName}'s wick!`);
+            return;
           }
+          if (!canAddFriend(entitlementRef.current, friendsRef.current.length, Date.now())) {
+            setActiveTab('circle');
+            setPaywallReason('friend');
+            return;
+          }
+          void cloudKitService.refreshFriendCandles().then((remoteFriends) => {
+            if (remoteFriends.length > 0) {
+              let removedSet = new Set<string>();
+              try {
+                const rawRemoved = kvGet(KEY_REMOVED_FRIENDS);
+                if (rawRemoved) {
+                  removedSet = new Set(JSON.parse(rawRemoved) as string[]);
+                }
+              } catch {
+                // ignore corrupt removed list
+              }
+              const filtered = remoteFriends.filter((f) => !removedSet.has(f.id));
+              setFriends(filtered);
+              kvSet(KEY_FRIENDS, JSON.stringify(filtered));
+            }
+          });
+          setActiveTab('circle');
+          showToast('Friend paired via iCloud!');
         });
         return;
       }
@@ -543,6 +616,7 @@ function WickRoot() {
       return;
     }
     void syncHealthKit();
+    void syncPendingSparkRescues();
     const unsubHk = subscribeToHealthKitSteps(() => {
       void syncHealthKit();
     });
@@ -588,6 +662,7 @@ function WickRoot() {
       if (activeNow) {
         setResumeTick((t) => t + 1);
         void syncHealthKit();
+        void syncPendingSparkRescues();
         void cloudKitService
           .refreshFriendCandles()
           .then(applyFilteredFriends)
@@ -596,6 +671,7 @@ function WickRoot() {
     });
     const poll = setInterval(() => {
       void syncHealthKit();
+      void syncPendingSparkRescues();
     }, 15000);
 
     return () => {
@@ -607,7 +683,7 @@ function WickRoot() {
       appSub.remove();
       clearInterval(poll);
     };
-  }, [onboarded, syncHealthKit, applyStepTotal]);
+  }, [onboarded, syncHealthKit, syncPendingSparkRescues, applyStepTotal]);
 
   // iPhone tilt gravity sway while Flame screen is open and active
   useEffect(() => {
@@ -1026,14 +1102,23 @@ function WickRoot() {
 
   const handleSendSpark = async () => {
     const senderName = settingsRef.current.candleName?.trim() || 'Your friend';
+    const nowMs = Date.now();
+    const sparkId = `spark_${nowMs}`;
+    const expiresAt = nowMs + SPARK_EXPIRY_MS;
+    const ckSparkUrl = await createNativeSparkShareUrl(
+      sparkId,
+      senderName,
+      SPARK_STEPS_REQUIRED,
+      expiresAt
+    );
     const token = createSparkToken(
-      `spark_${Date.now()}`,
+      sparkId,
       senderName,
       'local_ios',
       SPARK_SHARED_APP_SECRET,
-      Date.now()
+      nowMs
     );
-    const url = buildSparkUniversalLink(token);
+    const url = ckSparkUrl ?? buildSparkUniversalLink(token);
     try {
       await Share.share({
         title: 'Save my Wick!',
