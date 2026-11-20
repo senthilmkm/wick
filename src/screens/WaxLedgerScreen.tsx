@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   buildWeeklyRecapSummary,
   CANDLE_MOOD_COLORS,
@@ -45,6 +46,7 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
   onExportPdf,
   onUpgradePro,
 }) => {
+  const insets = useSafeAreaInsets();
   const [showRecap, setShowRecap] = useState(false);
   const limit = getVisibleLedgerLimit(entitlement);
   const visibleLayers = [...layers].reverse().slice(0, limit);
@@ -55,7 +57,16 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
   const titlePrefix = candleName?.trim() ? candleName.trim().toUpperCase() : 'WICK';
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.root}
+      contentContainerStyle={[
+        styles.content,
+        {
+          paddingTop: Math.max(56, insets.top + 16),
+          paddingBottom: Math.max(120, insets.bottom + 96),
+        },
+      ]}
+    >
       <View style={styles.headerRow}>
         <View>
           <Text style={[styles.title, { color: theme.primaryText }]}>

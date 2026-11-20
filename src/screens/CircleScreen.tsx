@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActiveSparkRescue, FriendCandle, WickTheme } from '../types/wick';
 
 const PAIR_STEPS = [
@@ -32,6 +33,8 @@ interface CircleScreenProps {
   theme: WickTheme;
   onInviteFriend: () => void;
   onSendSpark: () => void;
+  onNudgeFriend?: (friend: FriendCandle) => void;
+  onDismissRescue?: () => void;
   onRemoveFriend?: (friendId: string) => void;
 }
 
@@ -41,12 +44,24 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
   theme,
   onInviteFriend,
   onSendSpark,
+  onNudgeFriend,
+  onDismissRescue,
   onRemoveFriend,
 }) => {
+  const insets = useSafeAreaInsets();
   const [infoVisible, setInfoVisible] = useState(false);
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.root}
+      contentContainerStyle={[
+        styles.content,
+        {
+          paddingTop: Math.max(56, insets.top + 16),
+          paddingBottom: Math.max(120, insets.bottom + 96),
+        },
+      ]}
+    >
       <View style={styles.headerRow}>
         <Text style={[styles.title, { color: theme.primaryText }]}>Circle</Text>
         <View style={styles.headerActions}>
@@ -69,9 +84,18 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
 
       {activeRescue && (
         <View style={styles.rescueCard}>
-          <Text style={styles.rescueTitle}>
-            Rescuing {activeRescue.senderName}&apos;s Wick
-          </Text>
+          <View style={styles.rescueHeader}>
+            <Text style={styles.rescueTitle}>
+              {activeRescue.completed
+                ? `Rescued ${activeRescue.senderName}'s Wick!`
+                : `Rescuing ${activeRescue.senderName}'s Wick`}
+            </Text>
+            {activeRescue.completed && onDismissRescue && (
+              <Pressable onPress={onDismissRescue}>
+                <Text style={styles.rescueDone}>Done</Text>
+              </Pressable>
+            )}
+          </View>
           <Text style={styles.rescueProgress}>
             {activeRescue.stepsWalked} / {activeRescue.stepsRequired} steps
           </Text>
@@ -113,8 +137,11 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
                   {friend.state.toLowerCase().replace('_', ' ')} • {friend.streakDays}d streak
                 </Text>
               </View>
-              <Pressable style={styles.sparkSmallBtn} onPress={onSendSpark}>
-                <Text style={styles.sparkSmallText}>Spark</Text>
+              <Pressable
+                style={styles.sparkSmallBtn}
+                onPress={() => (onNudgeFriend ? onNudgeFriend(friend) : onSendSpark())}
+              >
+                <Text style={styles.sparkSmallText}>Nudge</Text>
               </Pressable>
             </View>
           );
@@ -198,7 +225,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
   },
+  rescueHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   rescueTitle: { color: '#FF9F43', fontWeight: '700', fontSize: 15 },
+  rescueDone: { color: '#F5F5F7', fontWeight: '700', fontSize: 13 },
   rescueProgress: { color: '#F5F5F7', fontSize: 14, marginTop: 4 },
   emptyCard: {
     backgroundColor: 'rgba(255,255,255,0.06)',

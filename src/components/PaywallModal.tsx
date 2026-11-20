@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EntitlementState } from '../types/wick';
 
 const PRIVACY_URL = 'https://senthilmkm.github.io/wick/privacy.html';
@@ -13,8 +14,8 @@ interface PaywallModalProps {
   reason: PaywallReason;
   entitlement: EntitlementState;
   priceLabel?: string | null;
-  onStartPro: () => void;
-  onRestorePurchases: () => void;
+  onStartPro: () => void | Promise<void>;
+  onRestorePurchases: () => void | Promise<void>;
   onClose: () => void;
 }
 
@@ -36,29 +37,58 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
   onRestorePurchases,
   onClose,
 }) => {
-  const ctaText = priceLabel ? `Unlock Wick Pro • ${priceLabel}` : 'Unlock Wick Pro Forever';
+  const insets = useSafeAreaInsets();
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!visible) {
+      setBusy(false);
+    }
+  }, [visible]);
+
+  const ctaText = busy
+    ? 'Processing...'
+    : priceLabel
+      ? `Unlock Wick Pro • ${priceLabel}`
+      : 'Unlock Wick Pro Forever';
+
+  const handleAction = async (fn: () => void | Promise<void>) => {
+    if (busy) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await fn();
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { paddingBottom: Math.max(40, insets.bottom + 16) }]}>
           <Text style={styles.badge}>WICK PRO • LIFETIME</Text>
           <Text style={styles.title}>{REASON_TITLES[reason]}</Text>
           <Text style={styles.body}>
             One-time purchase to unlock all 6 background themes, unlimited Multiplayer Lock Screen
-            Widgets, watermark-free 3s Story videos, PDF Wax Ledger exports, full streak history,
-            and Glass Domes forever.
+            Widgets, unlimited daily streak shares, PDF Wax Ledger exports, full streak history, and
+            Glass Domes forever.
           </Text>
 
-          <Pressable style={styles.primaryBtn} onPress={onStartPro}>
+          <Pressable
+            style={[styles.primaryBtn, busy && { opacity: 0.6 }]}
+            disabled={busy}
+            onPress={() => void handleAction(onStartPro)}
+          >
             <Text style={styles.primaryText}>{ctaText}</Text>
           </Pressable>
 
           <View style={styles.footerRow}>
-            <Pressable onPress={onRestorePurchases}>
+            <Pressable disabled={busy} onPress={() => void handleAction(onRestorePurchases)}>
               <Text style={styles.linkText}>Restore Purchases</Text>
             </Pressable>
-            <Pressable onPress={onClose}>
+            <Pressable disabled={busy} onPress={onClose}>
               <Text style={styles.linkText}>Not Now</Text>
             </Pressable>
           </View>

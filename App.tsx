@@ -8,6 +8,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Linking, Modal, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { MMKV } from 'react-native-mmkv';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PaywallModal, PaywallReason } from './src/components/PaywallModal';
 import { getThemeById } from './src/constants/themes';
 import {
@@ -187,13 +188,16 @@ class AppErrorBoundary extends React.Component<
 
 export default function App() {
   return (
-    <AppErrorBoundary>
-      <WickRoot />
-    </AppErrorBoundary>
+    <SafeAreaProvider>
+      <AppErrorBoundary>
+        <WickRoot />
+      </AppErrorBoundary>
+    </SafeAreaProvider>
   );
 }
 
 function WickRoot() {
+  const insets = useSafeAreaInsets();
   const [hydrated, setHydrated] = useState<boolean>(() => mmkvInstance !== null);
   const [onboarded, setOnboarded] = useState<boolean>(() => kvGet(KEY_ONBOARDED) === '1');
   const [activeTab, setActiveTab] = useState<TabKey>('flame');
@@ -1008,6 +1012,18 @@ function WickRoot() {
     }
   };
 
+  const handleNudgeFriend = async (friend: FriendCandle) => {
+    const stateLabel = friend.state.toLowerCase().replace('_', ' ');
+    try {
+      await Share.share({
+        title: `Nudge ${friend.displayName}`,
+        message: `Hey ${friend.displayName} — your Wick candle is ${stateLabel}! Take a quick walk to keep your ${friend.streakDays}-day streak glowing.`,
+      });
+    } catch {
+      showToast('Could not open Share Sheet.');
+    }
+  };
+
   const handleSendSpark = async () => {
     const senderName = settingsRef.current.candleName?.trim() || 'Your friend';
     const token = createSparkToken(
@@ -1279,6 +1295,13 @@ function WickRoot() {
           onSendSpark={() => {
             void handleSendSpark();
           }}
+          onNudgeFriend={(friend) => {
+            void handleNudgeFriend(friend);
+          }}
+          onDismissRescue={() => {
+            setActiveRescue(null);
+            rescueBaselineStepsRef.current = null;
+          }}
           onRemoveFriend={handleRemoveFriend}
         />
       )}
@@ -1336,31 +1359,29 @@ function WickRoot() {
         reason={paywallReason ?? 'general'}
         entitlement={entitlement}
         priceLabel={proPriceLabel}
-        onStartPro={() => {
-          void purchaseProPackage(REVENUECAT_IOS_KEY).then(({ purchased }) => {
-            if (purchased) {
-              kvSet(KEY_PRO_CACHE, '1');
-              void SecureStore.setItemAsync(SECURE_PRO, '1').catch(() => {});
-              setEntitlement((e) => ({ ...e, isPro: true, isEligibleForIntroTrial: false }));
-              setPaywallReason(null);
-              showToast('Welcome to Wick Pro!');
-            } else {
-              showToast('Purchase could not be completed.');
-            }
-          });
-        }}
-        onRestorePurchases={() => {
-          void restoreProPurchases(REVENUECAT_IOS_KEY).then((restored) => {
+        onStartPro={async () => {
+          const { purchased } = await purchaseProPackage(REVENUECAT_IOS_KEY);
+          if (purchased) {
+            kvSet(KEY_PRO_CACHE, '1');
+            void SecureStore.setItemAsync(SECURE_PRO, '1').catch(() => {});
+            setEntitlement((e) => ({ ...e, isPro: true, isEligibleForIntroTrial: false }));
             setPaywallReason(null);
-            if (restored) {
-              kvSet(KEY_PRO_CACHE, '1');
-              void SecureStore.setItemAsync(SECURE_PRO, '1').catch(() => {});
-              setEntitlement((e) => ({ ...e, isPro: true, isEligibleForIntroTrial: false }));
-              showToast('Wick Pro restored!');
-            } else {
-              showToast('No previous Wick Pro purchase found.');
-            }
-          });
+            showToast('Welcome to Wick Pro!');
+          } else {
+            showToast('Purchase could not be completed.');
+          }
+        }}
+        onRestorePurchases={async () => {
+          const restored = await restoreProPurchases(REVENUECAT_IOS_KEY);
+          setPaywallReason(null);
+          if (restored) {
+            kvSet(KEY_PRO_CACHE, '1');
+            void SecureStore.setItemAsync(SECURE_PRO, '1').catch(() => {});
+            setEntitlement((e) => ({ ...e, isPro: true, isEligibleForIntroTrial: false }));
+            showToast('Wick Pro restored!');
+          } else {
+            showToast('No previous Wick Pro purchase found.');
+          }
         }}
         onClose={() => setPaywallReason(null)}
       />
@@ -1412,7 +1433,7 @@ function WickRoot() {
       </Modal>
 
       {(tabsVisible || activeTab !== 'flame') && (
-        <View style={styles.tabBarWrap}>
+        <View style={[styles.tabBarWrap, { bottom: Math.max(20, insets.bottom + 8) }]}>
           <BlurView intensity={40} tint="dark" style={styles.tabBar}>
             {(
               [

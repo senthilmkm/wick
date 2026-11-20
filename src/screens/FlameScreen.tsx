@@ -1,6 +1,7 @@
 import { Canvas, LinearGradient, RoundedRect, Circle, vec } from '@shopify/react-native-skia';
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Candle3DCanvas } from '../components/Candle3DCanvas';
 import { InfoModal } from '../components/InfoModal';
 import { formatTimeLeftLabel } from '../engine/candleMath';
@@ -41,6 +42,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
   onBlowOutNight,
   onToggleControlsVisibility,
 }) => {
+  const insets = useSafeAreaInsets();
   const [showPacePill, setShowPacePill] = useState(false);
   const [showActionsSheet, setShowActionsSheet] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
@@ -100,7 +102,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
   );
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { paddingTop: Math.max(52, insets.top + 8) }]}>
       {/* Top Minimal Corner Actions (Two-Line Micro-Header) */}
       <View style={styles.topRow}>
         <View style={styles.headerLeft}>

@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const SUPPORT_URL = 'https://senthilmkm.github.io/wick/support.html';
 import { THEME_LIST } from '../constants/themes';
@@ -47,11 +48,21 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
   onResetData,
   onDebugInjectSteps,
 }) => {
+  const insets = useSafeAreaInsets();
   const [devTapCount, setDevTapCount] = useState(0);
   const showDebugger = typeof __DEV__ !== 'undefined' && __DEV__ && devTapCount >= 3;
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.root}
+      contentContainerStyle={[
+        styles.content,
+        {
+          paddingTop: Math.max(56, insets.top + 16),
+          paddingBottom: Math.max(120, insets.bottom + 96),
+        },
+      ]}
+    >
       <Text style={[styles.title, { color: theme.primaryText }]}>Sanctuary</Text>
 
       {/* Background Themes */}
