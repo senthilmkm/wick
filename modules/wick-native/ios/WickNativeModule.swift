@@ -10,7 +10,17 @@ public class WickNativeModule: Module {
   private let recordType = "FriendCandleStatus"
   private let sparkRecordType = "SparkRequest"
   private let recordName = "myCandleStatus"
-  private let resultsQueue = DispatchQueue(label: "com.senthilmkm.wick.ckResults")
+
+  private final class LockedBox<T>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _value: T
+    init(_ value: T) { _value = value }
+    func withLock<R>(_ body: (inout T) -> R) -> R {
+      lock.lock()
+      defer { lock.unlock() }
+      return body(&_value)
+    }
+  }
 
   private lazy var container = CKContainer(identifier: containerId)
   private lazy var zoneID = CKRecordZone.ID(zoneName: zoneName, ownerName: CKCurrentUserDefaultName)
@@ -101,17 +111,19 @@ public class WickNativeModule: Module {
           let share = CKShare(rootRecord: root)
           share[CKShare.SystemFieldKey.title] = "Wick Candle" as CKRecordValue
           share.publicPermission = .readOnly
-          var savedShareUrl: String?
+          let savedShareUrl = LockedBox<String?>(nil)
           let op = CKModifyRecordsOperation(recordsToSave: [root, share], recordIDsToDelete: nil)
           op.perRecordSaveBlock = { _, saveResult in
             if case .success(let savedRecord) = saveResult, let savedShare = savedRecord as? CKShare {
-              savedShareUrl = savedShare.url?.absoluteString
+              let urlStr = savedShare.url?.absoluteString
+              savedShareUrl.withLock { $0 = urlStr }
             }
           }
           op.modifyRecordsResultBlock = { result in
             switch result {
             case .success:
-              promise.resolve(savedShareUrl ?? share.url?.absoluteString ?? "")
+              let resolved = savedShareUrl.withLock { $0 } ?? share.url?.absoluteString ?? ""
+              promise.resolve(resolved)
             case .failure(let err):
               promise.reject("CK_SHARE_ERR", err.localizedDescription)
             }
@@ -161,7 +173,7 @@ public class WickNativeModule: Module {
           promise.resolve([])
           return
         }
-        var results: [[String: Any]] = []
+        let results = LockedBox<[[String: Any]]>([])
         let group = DispatchGroup()
         for zone in zones {
           group.enter()
@@ -181,17 +193,14 @@ public class WickNativeModule: Module {
                   ])
                 }
               }
-              self.resultsQueue.sync {
-                results.append(contentsOf: zoneItems)
-              }
+              results.withLock { $0.append(contentsOf: zoneItems) }
             }
             group.leave()
           }
         }
         group.notify(queue: .main) {
-          self.resultsQueue.sync {
-            promise.resolve(results)
-          }
+          let snapshot = results.withLock { $0 }
+          promise.resolve(snapshot)
         }
       }
     }
@@ -215,17 +224,19 @@ public class WickNativeModule: Module {
         share[CKShare.SystemFieldKey.title] = "Save \(senderName)'s Wick" as CKRecordValue
         share.publicPermission = .readWrite
 
-        var savedShareUrl: String?
+        let savedShareUrl = LockedBox<String?>(nil)
         let op = CKModifyRecordsOperation(recordsToSave: [record, share], recordIDsToDelete: nil)
         op.perRecordSaveBlock = { _, saveResult in
           if case .success(let savedRecord) = saveResult, let savedShare = savedRecord as? CKShare {
-            savedShareUrl = savedShare.url?.absoluteString
+            let urlStr = savedShare.url?.absoluteString
+            savedShareUrl.withLock { $0 = urlStr }
           }
         }
         op.modifyRecordsResultBlock = { result in
           switch result {
           case .success:
-            promise.resolve(savedShareUrl ?? share.url?.absoluteString ?? "")
+            let resolved = savedShareUrl.withLock { $0 } ?? share.url?.absoluteString ?? ""
+            promise.resolve(resolved)
           case .failure(let err):
             promise.reject("CK_SPARK_SHARE_ERR", err.localizedDescription)
           }
@@ -239,16 +250,16 @@ public class WickNativeModule: Module {
         promise.resolve(["accepted": false, "kind": "unknown"])
         return
       }
-      var fetchedMeta: CKShare.Metadata?
+      let fetchedMeta = LockedBox<CKShare.Metadata?>(nil)
       let metaOp = CKFetchShareMetadataOperation(shareURLs: [url])
       metaOp.shouldFetchRootRecord = true
       metaOp.perShareMetadataResultBlock = { _, res in
         if case .success(let meta) = res {
-          fetchedMeta = meta
+          fetchedMeta.withLock { $0 = meta }
         }
       }
       metaOp.fetchShareMetadataResultBlock = { result in
-        guard case .success = result, let metadata = fetchedMeta else {
+        guard case .success = result, let metadata = fetchedMeta.withLock({ $0 }) else {
           promise.resolve(["accepted": false, "kind": "unknown"])
           return
         }
@@ -286,7 +297,7 @@ public class WickNativeModule: Module {
           return
         }
         let group = DispatchGroup()
-        var updatedAny = false
+        let updatedAny = LockedBox(false)
         for zone in zones {
           group.enter()
           let pred = NSPredicate(format: "sparkId == %@", sparkId)
@@ -306,7 +317,7 @@ public class WickNativeModule: Module {
                 let saveOp = CKModifyRecordsOperation(recordsToSave: toSave, recordIDsToDelete: nil)
                 saveOp.modifyRecordsResultBlock = { saveRes in
                   if case .success = saveRes {
-                    self.resultsQueue.sync { updatedAny = true }
+                    updatedAny.withLock { $0 = true }
                   }
                   group.leave()
                 }
@@ -318,9 +329,7 @@ public class WickNativeModule: Module {
           }
         }
         group.notify(queue: .main) {
-          self.resultsQueue.sync {
-            promise.resolve(updatedAny)
-          }
+          promise.resolve(updatedAny.withLock { $0 })
         }
       }
     }
