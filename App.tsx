@@ -86,6 +86,7 @@ import {
   scheduleMorningWakeNotification,
 } from './src/services/notificationService';
 import { playMatchStrikeSound } from './src/services/soundService';
+import { createDefaultShareCardDriver, ShareCardService } from './src/services/shareCardService';
 import { DEFAULT_SETTINGS, LocalStorageService } from './src/services/storageService';
 import { subscribeToTiltAngle } from './src/services/tiltService';
 import {
@@ -159,6 +160,7 @@ const storageService = new LocalStorageService(
 );
 
 const cloudKitService = new CloudKitCircleService(createNativeCloudKitDriver());
+const shareCardService = new ShareCardService(createDefaultShareCardDriver());
 
 class AppErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -231,6 +233,7 @@ function WickRoot() {
   const goalCelebratedDateRef = useRef<string | null>(null);
   const completedSparkSubmittedRef = useRef<string | null>(null);
   const checkingSparkRescuesRef = useRef(false);
+  const sharingCandleRef = useRef(false);
 
   const [settings, setSettings] = useState<UserSettings>(() => storageService.loadSettings());
   const [waxLayers, setWaxLayers] = useState<WaxLayer[]>(() => storageService.loadWaxLayers());
@@ -1240,25 +1243,36 @@ function WickRoot() {
   };
 
   const handleShareCandle = async () => {
+    if (sharingCandleRef.current) {
+      return;
+    }
     const now = new Date();
     if (!canExportVideo(entitlement, now)) {
       setPaywallReason('video');
       return;
     }
+    sharingCandleRef.current = true;
     try {
-      const shareRes = await Share.share({
-        title: 'My Wick Today',
-        message: `Day ${snapshot.streakDays} • My wick is ${snapshot.state
-          .toLowerCase()
-          .replace('_', ' ')} (${snapshot.stepsToday.toLocaleString('en-US')} steps today) — Keep your wick lit!`,
+      const outcome = await shareCardService.shareDailyCard({
+        candleName: settingsRef.current.candleName,
+        streakDays: snapshot.streakDays,
+        stepsToday: snapshot.stepsToday,
+        dailyStepGoal: settingsRef.current.dailyStepGoal,
+        state: snapshot.state,
+        flameIntensity: snapshot.flameIntensity,
+        flameColorHex: snapshot.flameColorHex,
+        waxGrams: snapshot.waxGrams,
+        theme,
       });
-      if (shareRes.action !== Share.dismissedAction) {
+      if (outcome === 'shared') {
         const updated = recordVideoExport(entitlementRef.current, now);
         setEntitlement(updated);
         await storageService.saveVideoExportQuota(updated.weekKey, updated.freeVideoExportsThisWeek);
       }
     } catch {
       showToast('Could not open Share Sheet.');
+    } finally {
+      sharingCandleRef.current = false;
     }
   };
 

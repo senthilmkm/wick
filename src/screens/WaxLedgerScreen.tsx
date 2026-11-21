@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   buildWeeklyRecapSummary,
@@ -8,7 +8,10 @@ import {
   getLocalDateKey,
 } from '../engine/candleMath';
 import { getVisibleLedgerLimit } from '../engine/trialGuard';
+import { createDefaultShareCardDriver, ShareCardService } from '../services/shareCardService';
 import { CandleMood, EntitlementState, WaxLayer, WickTheme } from '../types/wick';
+
+const shareCardService = new ShareCardService(createDefaultShareCardDriver());
 
 const MILESTONES = [
   { days: 7, label: 'Bronze Band', color: '#CD7F32' },
@@ -48,6 +51,7 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const [showRecap, setShowRecap] = useState(false);
+  const [isSharingWeek, setIsSharingWeek] = useState(false);
   const limit = getVisibleLedgerLimit(entitlement);
   const visibleLayers = [...layers].reverse().slice(0, limit);
   const todaySpec = deriveWaxLayerSpec(todaySteps, dailyStepGoal);
@@ -235,19 +239,27 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
             </View>
 
             <Pressable
-              style={[styles.recapShareBtn, { backgroundColor: theme.accent }]}
+              style={[
+                styles.recapShareBtn,
+                { backgroundColor: theme.accent, opacity: isSharingWeek ? 0.6 : 1 },
+              ]}
+              disabled={isSharingWeek}
               onPress={() => {
-                void Share.share({
-                  title: `${titlePrefix} • Week in Wax`,
-                  message: `${titlePrefix} (${recap.dateRangeLabel}): ${recap.totalSteps.toLocaleString(
-                    'en-US'
-                  )} steps • ${recap.daysLit}/7 days lit${
-                    recap.topMood ? ` • Top mood: ${recap.topMood}` : ''
-                  } — Keep your wick lit!`,
-                }).catch(() => {});
+                if (isSharingWeek) {
+                  return;
+                }
+                setIsSharingWeek(true);
+                void shareCardService
+                  .shareWeeklyCard({ candleName, recap, theme })
+                  .catch(() => {})
+                  .finally(() => {
+                    setIsSharingWeek(false);
+                  });
               }}
             >
-              <Text style={styles.recapShareText}>Share Week</Text>
+              <Text style={styles.recapShareText}>
+                {isSharingWeek ? 'Preparing Card...' : 'Share Week'}
+              </Text>
             </Pressable>
             <Pressable style={styles.recapDoneBtn} onPress={() => setShowRecap(false)}>
               <Text style={styles.recapDoneText}>Done</Text>

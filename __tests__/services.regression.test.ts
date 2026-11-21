@@ -1,3 +1,11 @@
+jest.mock('@shopify/react-native-skia', () => ({
+  ImageFormat: { PNG: 0 },
+  matchFont: jest.fn(() => ({})),
+  Skia: { Surface: { MakeOffscreen: jest.fn(() => null) }, Paint: jest.fn(), Color: jest.fn(), XYWHRect: jest.fn(), RRectXY: jest.fn() },
+}));
+jest.mock('react-native-share', () => ({ __esModule: true, default: { open: jest.fn() } }));
+jest.mock('react-native', () => ({ Share: { share: jest.fn(), dismissedAction: 'dismissedAction' } }));
+
 import { getThemeById, THEME_LIST } from '../src/constants/themes';
 import { createMorningSnapshot } from '../src/engine/candleStateMachine';
 import {
@@ -9,6 +17,7 @@ import {
 import { CloudKitCircleService } from '../src/services/cloudKitService';
 import { buildWaxLedgerPdfHtml, ExportService } from '../src/services/exportService';
 import { MotionCoordinator } from '../src/services/motionService';
+import { ShareCardService } from '../src/services/shareCardService';
 import {
   DEFAULT_SETTINGS,
   KEY_SETTINGS,
@@ -337,5 +346,49 @@ describe('themes, storage, motion, audio, export & CloudKit regression tests', (
     expect(upserts).toBe(3);
     expect(await ck.inviteFriendToLockScreen()).toBe('https://icloud.com/share/wick-1');
     expect(await ck.refreshFriendCandles()).toHaveLength(1);
+  });
+
+  it('shares rendered PNG cards for daily Flame and weekly Ledger with text fallback', async () => {
+    const openImageShare = jest.fn().mockResolvedValue('shared');
+    const openTextShare = jest.fn().mockResolvedValue('shared');
+    const cardService = new ShareCardService({
+      renderDailyPngDataUri: () => 'data:image/png;base64,DAILY',
+      renderWeeklyPngDataUri: () => null,
+      openImageShare,
+      openTextShare,
+    });
+    const theme = getThemeById('obsidian_night');
+
+    expect(
+      await cardService.shareDailyCard({
+        candleName: 'Senthil',
+        streakDays: 9,
+        stepsToday: 8100,
+        dailyStepGoal: 8000,
+        state: 'BLAZING',
+        flameIntensity: 1,
+        flameColorHex: '#FFF6D6',
+        waxGrams: 180,
+        theme,
+      })
+    ).toBe('shared');
+    expect(openImageShare).toHaveBeenCalledWith(
+      expect.objectContaining({ filename: 'wick-today.png', dataUri: 'data:image/png;base64,DAILY' })
+    );
+
+    expect(
+      await cardService.shareWeeklyCard({
+        candleName: 'Senthil',
+        recap: {
+          dateRangeLabel: 'Nov 14 – Nov 20',
+          totalSteps: 48000,
+          daysLit: 7,
+          topMood: 'Calm',
+          bands: [{ dateKey: '2026-11-20', colorHex: '#FF9F43', lit: true }],
+        },
+        theme,
+      })
+    ).toBe('shared');
+    expect(openTextShare).toHaveBeenCalledTimes(1);
   });
 });
