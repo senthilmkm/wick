@@ -17,18 +17,10 @@
 <body>
   <div class="card">
     <div class="brand">wick</div>
-    <h1>Pair your candle</h1>
-    <p>Accept this invite to add your friend to your Wick Circle and see their candle status.</p>
-    <a id="openBtn" class="btn" href="wick://circle/pair">Open in Wick</a>
+    <h1>Pair from Wick</h1>
+    <p>A candle pair uses the iCloud invite sent from the app. Open Wick, go to Circle, and tap + Pair Widget. This page cannot add a friend by itself.</p>
+    <a class="btn" href="wick://home">Open Wick</a>
     <a class="sub" href="https://apps.apple.com/app/id6836596501">Don't have Wick? Get it on the App Store</a>
   </div>
-  <script>
-    (function () {
-      var qs = window.location.search || '';
-      var deepLink = 'wick://circle/pair' + qs;
-      document.getElementById('openBtn').setAttribute('href', deepLink);
-      window.location.href = deepLink;
-    })();
-  </script>
 </body>
 </html>

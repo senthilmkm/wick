@@ -13,6 +13,7 @@ jest.mock('expo-notifications', () => ({
 
 import {
   notifySmokingGraceIfNeeded,
+  presentNudgeNotification,
   requestNotificationPermission,
   scheduleMorningWakeNotification,
 } from '../src/services/notificationService';
@@ -83,5 +84,25 @@ describe('notificationService', () => {
     mockGetPermissionsAsync.mockResolvedValueOnce({ status: 'granted' });
     mockSchedule.mockRejectedValueOnce(new Error('boom'));
     await notifySmokingGraceIfNeeded('DYING_EMBER', 'SMOKING_GRACE');
+  });
+
+  it('shows an incoming nudge when notifications are allowed', async () => {
+    mockGetPermissionsAsync.mockResolvedValueOnce({ status: 'denied' });
+    mockRequestPermissionsAsync.mockResolvedValueOnce({ status: 'denied' });
+    await presentNudgeNotification('Maya', 'Walk');
+    expect(mockSchedule).not.toHaveBeenCalled();
+
+    mockGetPermissionsAsync.mockResolvedValueOnce({ status: 'granted' });
+    await presentNudgeNotification('Maya', 'Walk');
+    expect(mockSchedule).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: { title: 'Maya nudged your wick', body: 'Walk' },
+        trigger: null,
+      })
+    );
+
+    mockGetPermissionsAsync.mockResolvedValueOnce({ status: 'granted' });
+    mockSchedule.mockRejectedValueOnce(new Error('boom'));
+    await presentNudgeNotification('Maya', 'Walk');
   });
 });

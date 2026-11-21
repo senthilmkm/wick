@@ -11,7 +11,13 @@ import {
   completeNativeSparkShare,
   createNativeCloudKitDriver,
   createNativeSparkShareUrl,
+  deleteNativeCompletedSparks,
+  deleteNativeNudges,
+  fetchNativeNudges,
+  fetchNativeSharedPendingSparks,
   reloadNativeWidgets,
+  sendNativeNudge,
+  writeNativeFriendWidgetSnapshot,
   writeNativeWidgetSnapshot,
 } from '../src/services/nativeCloudBridge';
 
@@ -33,7 +39,12 @@ describe('nativeCloudBridge', () => {
       streakDays: 3,
       updatedAt: 1000,
     });
-    expect(await driver.createFriendShareUrl()).toBe('');
+    expect(await driver.createFriendShareUrl({
+      displayName: 'Alex',
+      state: 'BLAZING',
+      flameIntensity: 1,
+      streakDays: 3,
+    })).toBe('');
     expect(await driver.fetchSharedFriendCandles()).toEqual([]);
     expect(await acceptNativeFriendShareUrl('https://www.icloud.com/share/abc')).toBe(false);
     expect(await createNativeSparkShareUrl('s1', 'Alex', 500, 9999)).toBeNull();
@@ -43,6 +54,22 @@ describe('nativeCloudBridge', () => {
     });
     expect(await completeNativeSparkShare('s1', 500)).toBe(false);
     expect(await checkNativePendingSparkRescues()).toEqual([]);
+    expect(await deleteNativeCompletedSparks([])).toBe(false);
+    expect(await deleteNativeCompletedSparks(['s1'])).toBe(false);
+    expect(
+      await sendNativeNudge({
+        ownerName: 'owner',
+        nudgeId: 'n1',
+        fromName: 'Alex',
+        message: 'walk',
+        createdAt: 1,
+      })
+    ).toBe(false);
+    expect(await fetchNativeNudges()).toEqual([]);
+    expect(await fetchNativeSharedPendingSparks()).toEqual([]);
+    expect(await deleteNativeNudges([])).toBe(false);
+    expect(await deleteNativeNudges(['n1'])).toBe(false);
+    writeNativeFriendWidgetSnapshot('');
 
     mockRequireOptionalNativeModule.mockImplementation(() => {
       throw new Error('no native');
@@ -85,7 +112,13 @@ describe('nativeCloudBridge', () => {
       updatedAt: 1000,
     });
     expect(mod.upsertOwnCandleRecord).toHaveBeenCalledWith('Alex', 'BLAZING', 1, 3, 1000);
-    expect(await driver.createFriendShareUrl()).toBe('https://www.icloud.com/share/abc');
+    expect(await driver.createFriendShareUrl({
+      displayName: 'Alex',
+      state: 'BLAZING',
+      flameIntensity: 1,
+      streakDays: 3,
+    })).toBe('https://www.icloud.com/share/abc');
+    expect(mod.createFriendShareUrl).toHaveBeenCalledWith('Alex', 'BLAZING', 1, 3);
     expect(await driver.fetchSharedFriendCandles()).toHaveLength(1);
     expect(await acceptNativeFriendShareUrl('https://www.icloud.com/share/abc')).toBe(true);
     expect(await acceptNativeFriendShareUrl('https://www.icloud.com/share/abc')).toBe(false);
@@ -114,6 +147,7 @@ describe('nativeCloudBridge', () => {
       createSparkShareRecord: jest
         .fn()
         .mockResolvedValueOnce('https://www.icloud.com/share/spark1')
+        .mockResolvedValueOnce({ delivery: 'circle' })
         .mockResolvedValueOnce('')
         .mockRejectedValueOnce(new Error('ck spark err')),
       acceptShareUrlWithKind: jest
@@ -131,9 +165,14 @@ describe('nativeCloudBridge', () => {
     };
     mockRequireOptionalNativeModule.mockReturnValue(fullMod);
 
-    expect(await createNativeSparkShareUrl('s1', 'Alex', 500, 9999)).toBe(
-      'https://www.icloud.com/share/spark1'
-    );
+    expect(await createNativeSparkShareUrl('s1', 'Alex', 500, 9999)).toEqual({
+      delivery: 'link',
+      shareUrl: 'https://www.icloud.com/share/spark1',
+    });
+    expect(await createNativeSparkShareUrl('s1', 'Alex', 500, 9999)).toEqual({
+      delivery: 'circle',
+      shareUrl: null,
+    });
     expect(await createNativeSparkShareUrl('s1', 'Alex', 500, 9999)).toBeNull();
     expect(await createNativeSparkShareUrl('s1', 'Alex', 500, 9999)).toBeNull();
 
@@ -153,5 +192,55 @@ describe('nativeCloudBridge', () => {
 
     expect(await checkNativePendingSparkRescues()).toEqual([{ sparkId: 's1', stepsWalked: 512 }]);
     expect(await checkNativePendingSparkRescues()).toEqual([]);
+
+    const nudgeMod = {
+      ...fullMod,
+      deleteCompletedSparkRecords: jest.fn().mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('del')),
+      sendNudge: jest.fn().mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('nudge')),
+      fetchNudges: jest
+        .fn()
+        .mockResolvedValueOnce([{ nudgeId: 'n1', fromName: 'Maya', message: 'Walk', createdAt: 5 }])
+        .mockRejectedValueOnce(new Error('fetch')),
+      writeFriendWidgetSnapshot: jest.fn(),
+      fetchSharedPendingSparks: jest
+        .fn()
+        .mockResolvedValueOnce([
+          { sparkId: 's2', senderName: 'Maya', stepsRequired: 500, expiresAt: 9 },
+          { sparkId: '', senderName: 'Skip', stepsRequired: 500, expiresAt: 9 },
+        ])
+        .mockResolvedValueOnce('nope')
+        .mockRejectedValueOnce(new Error('pending')),
+      deleteNudgeRecords: jest.fn().mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('nudge del')),
+    };
+    mockRequireOptionalNativeModule.mockReturnValue(nudgeMod);
+    expect(await deleteNativeCompletedSparks(['s1'])).toBe(true);
+    expect(await deleteNativeCompletedSparks(['s1'])).toBe(false);
+    expect(await sendNativeNudge({
+      ownerName: 'abc',
+      nudgeId: 'n1',
+      fromName: 'Alex',
+      message: 'Walk',
+      createdAt: 5,
+    })).toBe(true);
+    expect(await sendNativeNudge({
+      ownerName: 'abc',
+      nudgeId: 'n1',
+      fromName: 'Alex',
+      message: 'Walk',
+      createdAt: 5,
+    })).toBe(false);
+    expect(await fetchNativeNudges()).toEqual([
+      { nudgeId: 'n1', fromName: 'Maya', message: 'Walk', createdAt: 5 },
+    ]);
+    expect(await fetchNativeNudges()).toEqual([]);
+    writeNativeFriendWidgetSnapshot('{"displayName":"Maya"}');
+    expect(nudgeMod.writeFriendWidgetSnapshot).toHaveBeenCalledWith('{"displayName":"Maya"}');
+    expect(await fetchNativeSharedPendingSparks()).toEqual([
+      { sparkId: 's2', senderName: 'Maya', stepsRequired: 500, expiresAt: 9 },
+    ]);
+    expect(await fetchNativeSharedPendingSparks()).toEqual([]);
+    expect(await fetchNativeSharedPendingSparks()).toEqual([]);
+    expect(await deleteNativeNudges(['n1'])).toBe(true);
+    expect(await deleteNativeNudges(['n1'])).toBe(false);
   });
 });

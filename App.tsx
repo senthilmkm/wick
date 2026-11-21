@@ -31,15 +31,23 @@ import {
   isNighttimeWindow,
   WeeklyRecapSummary,
 } from './src/engine/candleMath';
+import { reigniteFromSpark, activateGlassDome, createMorningSnapshot, evaluateCandleState, igniteWithLighter, removeGlassDome, triggerNightBlowOut } from './src/engine/candleStateMachine';
 import {
-  activateGlassDome,
-  createMorningSnapshot,
-  evaluateCandleState,
-  igniteWithLighter,
-  reigniteFromSpark,
-  removeGlassDome,
-  triggerNightBlowOut,
-} from './src/engine/candleStateMachine';
+  buildFriendWidgetPayload,
+  canAskForSpark,
+  canSendNudge,
+  classifySparkRescue,
+  friendListChanged,
+  friendOwnerName,
+  isForgeablePairLink,
+  nudgeBody,
+  pickIncomingSpark,
+  readIdList,
+  readNudgeCooldowns,
+  rememberId,
+  selectWidgetFriend,
+  withNudgeCooldown,
+} from './src/engine/circleFlow';
 import {
   SPARK_EXPIRY_MS,
   SPARK_STEPS_REQUIRED,
@@ -87,11 +95,17 @@ import {
   completeNativeSparkShare,
   createNativeCloudKitDriver,
   createNativeSparkShareUrl,
+  deleteNativeCompletedSparks,
+  deleteNativeNudges,
+  fetchNativeNudges,
+  fetchNativeSharedPendingSparks,
   fetchNativeSleepFocus,
   fetchNativeTrialAnchor,
   markNativeTrialAnchorExpired,
   peekNativeShareUrlKind,
   reloadNativeWidgets,
+  sendNativeNudge,
+  writeNativeFriendWidgetSnapshot,
   writeNativeWidgetSnapshot,
 } from './src/services/nativeCloudBridge';
 import {
@@ -101,6 +115,7 @@ import {
 } from './src/services/nativeHealthKit';
 import {
   notifySmokingGraceIfNeeded,
+  presentNudgeNotification,
   scheduleMorningWakeNotification,
 } from './src/services/notificationService';
 import { playMatchStrikeSound } from './src/services/soundService';
@@ -151,6 +166,9 @@ const KEY_ONBOARDED = 'wick.onboarded.v1';
 const KEY_PRO_CACHE = 'wick.pro_cached.v1';
 const KEY_FRIENDS = 'wick.friends.v1';
 const KEY_REMOVED_FRIENDS = 'wick.removed_friends.v1';
+const KEY_NUDGE_COOLDOWN = 'wick.nudge.cooldown.v1';
+const KEY_SEEN_NUDGES = 'wick.nudge.seen.v1';
+const KEY_HANDLED_SPARKS = 'wick.spark.handled.v1';
 const SECURE_ONBOARDED = 'wick_onboarded_v1';
 const SECURE_SETTINGS = 'wick_settings_v1';
 const SECURE_SNAPSHOT = 'wick_snapshot_v1';
@@ -259,7 +277,12 @@ function WickRoot() {
   const manualBlowActiveRef = useRef(false);
   const goalCelebratedDateRef = useRef<string | null>(null);
   const completedSparkSubmittedRef = useRef<string | null>(null);
+  const sparkSyncAnnouncedRef = useRef<Set<string>>(new Set());
+  const appliedSparkIdsRef = useRef<Set<string>>(new Set());
+  const announcedSparkWaitRef = useRef<Set<string>>(new Set());
+  const seenNudgeIdsRef = useRef<Set<string>>(new Set());
   const checkingSparkRescuesRef = useRef(false);
+  const snapshotRef = useRef<CandleSnapshot | null>(null);
   const sharingCandleRef = useRef(false);
   const exportingPdfRef = useRef(false);
 
@@ -278,6 +301,7 @@ function WickRoot() {
     }
   });
   const [activeRescue, setActiveRescue] = useState<ActiveSparkRescue | null>(null);
+  const activeRescueRef = useRef<ActiveSparkRescue | null>(null);
   const rescueBaselineStepsRef = useRef<number | null>(null);
   const rescueBaselineDateKeyRef = useRef<string | null>(null);
   const rescueCarryoverStepsRef = useRef<number>(0);
@@ -341,7 +365,15 @@ function WickRoot() {
   );
   useEffect(() => {
     friendsRef.current = friends;
+    writeNativeFriendWidgetSnapshot(buildFriendWidgetPayload(selectWidgetFriend(friends)));
+    reloadNativeWidgets();
   }, [friends]);
+  useEffect(() => {
+    snapshotRef.current = snapshot;
+  }, [snapshot]);
+  useEffect(() => {
+    activeRescueRef.current = activeRescue;
+  }, [activeRescue]);
   useEffect(() => {
     settingsRef.current = settings;
   }, [settings]);
@@ -372,6 +404,11 @@ function WickRoot() {
       void completeNativeSparkShare(sparkId, stepsWalked).then((ok) => {
         if (ok) {
           completedSparkSubmittedRef.current = sparkId;
+          kvSet(
+            KEY_HANDLED_SPARKS,
+            JSON.stringify(rememberId(readIdList(kvGet(KEY_HANDLED_SPARKS)), sparkId))
+          );
+          showToast('Rescue synced. Their candle can reignite.');
         }
       });
     };
@@ -459,9 +496,9 @@ function WickRoot() {
         const walkedToday = Math.max(0, steps - rescueBaselineStepsRef.current);
         const totalWalked = rescueCarryoverStepsRef.current + walkedToday;
         const updated = updateSparkRescueProgress(prevRescue, totalWalked, Date.now());
-        if (updated.completed && !prevRescue.completed) {
-          void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          showToast(`500 steps done! ${updated.senderName}'s wick is reignited!`);
+        if (updated.completed && !prevRescue.completed && !sparkSyncAnnouncedRef.current.has(updated.sparkId)) {
+          sparkSyncAnnouncedRef.current.add(updated.sparkId);
+          showToast('500 steps done. Syncing the rescue…');
         }
         return updated;
       });
@@ -475,13 +512,38 @@ function WickRoot() {
     }
     checkingSparkRescuesRef.current = true;
     try {
-      const completedRescues = (await checkNativePendingSparkRescues()).filter(
-        (rescue) => rescue.stepsWalked >= SPARK_STEPS_REQUIRED
-      );
-      if (completedRescues.length === 0) {
+      const completedRescues = await checkNativePendingSparkRescues();
+      const current = snapshotRef.current;
+      if (!current || completedRescues.length === 0) {
         return;
       }
-      const totalRescuerSteps = completedRescues.reduce((sum, r) => sum + r.stepsWalked, 0);
+      const applyIds: string[] = [];
+      const waitIds: string[] = [];
+      let totalSteps = 0;
+      for (const rescue of completedRescues) {
+        const decision = classifySparkRescue(
+          current.state,
+          rescue.stepsWalked,
+          rescue.sparkId,
+          appliedSparkIdsRef.current,
+          announcedSparkWaitRef.current
+        );
+        if (decision === 'apply') {
+          applyIds.push(rescue.sparkId);
+          totalSteps += rescue.stepsWalked;
+        } else if (decision === 'wait') {
+          waitIds.push(rescue.sparkId);
+        }
+      }
+      if (waitIds.length > 0) {
+        for (const id of waitIds) {
+          announcedSparkWaitRef.current.add(id);
+        }
+        showToast('Your friend walked 500 steps. The candle reignites when night mode or the Glass Dome ends.');
+      }
+      if (applyIds.length === 0) {
+        return;
+      }
       const nowMs = trustedNowRef.current;
       setSnapshot((prev) => {
         if (prev.state === 'NIGHT_SLEEP' || prev.state === 'GLASS_DOME') {
@@ -492,14 +554,78 @@ function WickRoot() {
         void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(reignited)).catch(() => {});
         return reignited;
       });
+      for (const id of applyIds) {
+        appliedSparkIdsRef.current.add(id);
+      }
+      void deleteNativeCompletedSparks(applyIds);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast(
-        `Your candle was reignited! Your friend walked ${totalRescuerSteps.toLocaleString('en-US')} steps.`
+        `Your candle was reignited. Your friend walked ${totalSteps.toLocaleString('en-US')} steps.`
       );
     } finally {
       checkingSparkRescuesRef.current = false;
     }
   }, [showToast]);
+
+  const syncIncomingNudges = useCallback(async () => {
+    const nudges = await fetchNativeNudges();
+    const seen = new Set(readIdList(kvGet(KEY_SEEN_NUDGES)));
+    const delivered: string[] = [];
+    for (const nudge of nudges) {
+      if (!nudge?.nudgeId) {
+        continue;
+      }
+      if (seen.has(nudge.nudgeId) || seenNudgeIdsRef.current.has(nudge.nudgeId)) {
+        delivered.push(nudge.nudgeId);
+        continue;
+      }
+      seenNudgeIdsRef.current.add(nudge.nudgeId);
+      seen.add(nudge.nudgeId);
+      const fromName = nudge.fromName?.trim() || 'A friend';
+      const message = nudge.message?.trim() || 'Keep your wick lit.';
+      showToast(`${fromName}: ${message}`);
+      void presentNudgeNotification(fromName, message);
+      delivered.push(nudge.nudgeId);
+    }
+    if (delivered.length === 0) {
+      return;
+    }
+    let stored = readIdList(kvGet(KEY_SEEN_NUDGES));
+    for (const id of delivered) {
+      stored = rememberId(stored, id);
+    }
+    kvSet(KEY_SEEN_NUDGES, JSON.stringify(stored));
+    void deleteNativeNudges(delivered);
+  }, [showToast]);
+
+  const syncIncomingSparks = useCallback(async () => {
+    const rows = await fetchNativeSharedPendingSparks();
+    const handled = new Set(readIdList(kvGet(KEY_HANDLED_SPARKS)));
+    const picked = pickIncomingSpark(
+      rows,
+      trustedNowRef.current,
+      activeRescueRef.current?.sparkId ?? null,
+      handled
+    );
+    if (!picked) {
+      return;
+    }
+    const stepsRequired = Math.max(SPARK_STEPS_REQUIRED, picked.stepsRequired);
+    const senderName = picked.senderName.trim() || 'Friend';
+    rescueBaselineStepsRef.current = stepsTodayRef.current;
+    rescueBaselineDateKeyRef.current = snapshotDateKeyRef.current || getLocalDateKey(trustedDate());
+    rescueCarryoverStepsRef.current = 0;
+    setActiveRescue({
+      sparkId: picked.sparkId,
+      senderName,
+      stepsWalked: 0,
+      stepsRequired,
+      expiresAt: picked.expiresAt,
+      completed: false,
+    });
+    setActiveTab('circle');
+    showToast(`Walk ${stepsRequired} steps to rescue ${senderName}'s wick!`);
+  }, [showToast, trustedDate]);
 
   const syncHealthKit = useCallback(async () => {
     const steps = await fetchTodayHealthKitSteps();
@@ -854,52 +980,8 @@ function WickRoot() {
         })();
         return;
       }
-      if (url.includes('circle/pair') || url.includes('pair.html')) {
-        if (!canAddFriend(entitlementRef.current, friendsRef.current.length, trustedNowRef.current)) {
-          setActiveTab('circle');
-          setPaywallReason('friend');
-          return;
-        }
-        const idMatch = /[?&]id=([^&]+)/.exec(url);
-        const nameMatch = /[?&]name=([^&]+)/.exec(url);
-        const streakMatch = /[?&]streak=(\d+)/.exec(url);
-        const friendId = idMatch ? decodeURIComponent(idMatch[1]) : `friend_${Date.now()}`;
-        const displayName = nameMatch ? decodeURIComponent(nameMatch[1]) : 'Friend';
-        const streakDays = streakMatch ? Number(streakMatch[1]) : 1;
-
-        setFriends((prev) => {
-          if (prev.some((f) => f.id === friendId)) {
-            return prev;
-          }
-          if (!canAddFriend(entitlementRef.current, prev.length, trustedNowRef.current)) {
-            return prev;
-          }
-          const next = capFriendList(
-            [
-              ...prev,
-              {
-                id: friendId,
-                displayName,
-                state: 'BLAZING' as const,
-                flameIntensity: 0.9,
-                streakDays,
-                updatedAt: trustedNowRef.current,
-              },
-            ],
-            entitlementRef.current,
-            trustedNowRef.current
-          );
-          kvSet(KEY_FRIENDS, JSON.stringify(next));
-          return next;
-        });
-        setActiveTab('circle');
-        showToast(`${displayName} paired to your Circle!`);
-        if (!settingsRef.current.candleName?.trim()) {
-          pendingInviteAfterNameRef.current = false;
-          setCandleNameDraft('');
-          setCandleNameError(null);
-          setShowCandleNameModal(true);
-        }
+      if (isForgeablePairLink(url)) {
+        showToast('Ask your friend to send the iCloud invite from Wick.');
         return;
       }
 
@@ -959,6 +1041,9 @@ function WickRoot() {
         entitlementRef.current,
         trustedNowRef.current
       );
+      if (!friendListChanged(friendsRef.current, filtered)) {
+        return;
+      }
       setFriends(filtered);
       kvSet(KEY_FRIENDS, JSON.stringify(filtered));
     };
@@ -989,15 +1074,28 @@ function WickRoot() {
         setResumeTick((t) => t + 1);
         void syncHealthKit();
         void syncPendingSparkRescues();
+        void syncIncomingNudges();
+        void syncIncomingSparks();
         void cloudKitService
           .refreshFriendCandles()
           .then(applyFilteredFriends)
           .catch(() => {});
       }
     });
+    void syncIncomingSparks();
+    void cloudKitService
+      .refreshFriendCandles()
+      .then(applyFilteredFriends)
+      .catch(() => {});
     const poll = setInterval(() => {
       void syncHealthKit();
       void syncPendingSparkRescues();
+      void syncIncomingNudges();
+      void syncIncomingSparks();
+      void cloudKitService
+        .refreshFriendCandles()
+        .then(applyFilteredFriends)
+        .catch(() => {});
     }, 15000);
 
     return () => {
@@ -1009,7 +1107,7 @@ function WickRoot() {
       appSub.remove();
       clearInterval(poll);
     };
-  }, [onboarded, syncHealthKit, syncPendingSparkRescues, applyStepTotal]);
+  }, [onboarded, syncHealthKit, syncPendingSparkRescues, syncIncomingNudges, syncIncomingSparks, applyStepTotal]);
 
   // iPhone tilt gravity sway while Flame screen is open and active
   useEffect(() => {
@@ -1266,6 +1364,9 @@ function WickRoot() {
             entitlementRef.current,
             trustedNowRef.current
           );
+          if (!friendListChanged(friendsRef.current, filtered)) {
+            return;
+          }
           setFriends(filtered);
           kvSet(KEY_FRIENDS, JSON.stringify(filtered));
         }
@@ -1424,37 +1525,60 @@ function WickRoot() {
   };
 
   const handleNudgeFriend = async (friend: FriendCandle) => {
-    const stateLabel = friend.state.toLowerCase().replace('_', ' ');
-    try {
-      await Share.share({
-        title: `Nudge ${friend.displayName}`,
-        message: `Hey ${friend.displayName} — your Wick candle is ${stateLabel}! Take a quick walk to keep your ${friend.streakDays}-day streak glowing.`,
-      });
-    } catch {
-      showToast('Could not open Share Sheet.');
+    const ownerName = friendOwnerName(friend.id);
+    if (!ownerName) {
+      showToast('Pair again with an iCloud invite before nudging this friend.');
+      return;
     }
+    const nowMs = trustedNowRef.current;
+    const cooldowns = readNudgeCooldowns(kvGet(KEY_NUDGE_COOLDOWN));
+    if (!canSendNudge(cooldowns[friend.id] ?? null, nowMs)) {
+      showToast(`You already nudged ${friend.displayName}. Try again in a few minutes.`);
+      return;
+    }
+    const sent = await sendNativeNudge({
+      ownerName,
+      nudgeId: `nudge_${nowMs}`,
+      fromName: settingsRef.current.candleName?.trim() || 'A friend',
+      message: nudgeBody(friend),
+      createdAt: nowMs,
+    });
+    if (!sent) {
+      showToast('Sign in to iCloud and pair both ways before a nudge can arrive.');
+      return;
+    }
+    kvSet(KEY_NUDGE_COOLDOWN, JSON.stringify(withNudgeCooldown(cooldowns, friend.id, nowMs)));
+    showToast(`Nudge sent to ${friend.displayName}.`);
   };
 
   const handleSendSpark = async () => {
+    if (!canAskForSpark(snapshotRef.current?.state ?? snapshot.state)) {
+      showToast('Ask for Spark when your flame is flickering, an ember, smoking, or out.');
+      return;
+    }
     const senderName = settingsRef.current.candleName?.trim() || 'Your friend';
     const nowMs = trustedNowRef.current;
     const sparkId = `spark_${nowMs}`;
     const expiresAt = nowMs + SPARK_EXPIRY_MS;
-    const ckSparkUrl = await createNativeSparkShareUrl(
+    const created = await createNativeSparkShareUrl(
       sparkId,
       senderName,
       SPARK_STEPS_REQUIRED,
       expiresAt
     );
-    if (!ckSparkUrl) {
+    if (!created) {
       showToast('Sign in to iCloud to send a Spark your friend can complete.');
+      return;
+    }
+    if (created.delivery === 'circle') {
+      showToast('Spark sent to your Circle. Your paired friend will see it in Wick.');
       return;
     }
     try {
       await Share.share({
         title: 'Save my Wick!',
-        message: `My wick is running low! Walk 500 steps to reignite my candle: ${ckSparkUrl}`,
-        url: ckSparkUrl,
+        message: `My wick is running low! Walk 500 steps to reignite my candle: ${created.shareUrl}`,
+        url: created.shareUrl ?? undefined,
       });
     } catch {
       showToast('Could not open Share Sheet.');
@@ -1501,18 +1625,23 @@ function WickRoot() {
       return;
     }
     await cloudKitService.syncOwnCandleIfNeeded(effectiveName, snapshot, Date.now(), true).catch(() => {});
-    const ckShareUrl = await cloudKitService.inviteFriendToLockScreen().catch(() => null);
-    const pairUrl =
-      ckShareUrl && ckShareUrl.length > 0
-        ? ckShareUrl
-        : `https://senthilmkm.github.io/wick/pair.html?id=${encodeURIComponent(
-            `usr_${Date.now()}`
-          )}&name=${encodeURIComponent(effectiveName)}&streak=${snapshot.streakDays}`;
+    const ckShareUrl = await cloudKitService
+      .inviteFriendToLockScreen({
+        displayName: effectiveName,
+        state: snapshot.state,
+        flameIntensity: snapshot.flameIntensity,
+        streakDays: snapshot.streakDays,
+      })
+      .catch(() => null);
+    if (!ckShareUrl) {
+      showToast('Sign in to iCloud to pair a lock screen candle.');
+      return;
+    }
     try {
       await Share.share({
         title: 'Pair our Wick Candles',
-        message: `Join my Wick Circle to keep our candles lit together: ${pairUrl}`,
-        url: pairUrl,
+        message: `Join my Wick Circle to keep our candles lit together: ${ckShareUrl}`,
+        url: ckShareUrl,
       });
       showToast('Circle invite link shared.');
     } catch {
@@ -1854,6 +1983,7 @@ function WickRoot() {
           onInviteFriend={() => {
             void handleInviteFriend();
           }}
+          canAskSpark={canAskForSpark(snapshot.state)}
           onSendSpark={() => {
             void handleSendSpark();
           }}
@@ -1861,6 +1991,13 @@ function WickRoot() {
             void handleNudgeFriend(friend);
           }}
           onDismissRescue={() => {
+            const sparkId = activeRescueRef.current?.sparkId;
+            if (sparkId) {
+              kvSet(
+                KEY_HANDLED_SPARKS,
+                JSON.stringify(rememberId(readIdList(kvGet(KEY_HANDLED_SPARKS)), sparkId))
+              );
+            }
             setActiveRescue(null);
             rescueBaselineStepsRef.current = null;
           }}

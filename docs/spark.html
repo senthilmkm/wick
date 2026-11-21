@@ -17,18 +17,10 @@
 <body>
   <div class="card">
     <div class="brand">wick • spark rescue</div>
-    <h1>Walk 500 steps to save a wick</h1>
-    <p>Your friend's candle is about to go out. Open Wick and walk 500 steps to reignite their flame.</p>
-    <a id="openBtn" class="btn" href="wick://spark/rescue">Open in Wick</a>
+    <h1>A Spark arrives in Wick</h1>
+    <p>If you are already paired, open Wick and the rescue appears in Circle. If your friend sent an iCloud link, open that link. This page cannot start a rescue by itself.</p>
+    <a class="btn" href="wick://home">Open Wick</a>
     <a class="sub" href="https://apps.apple.com/app/id6836596501">Don't have Wick? Get it on the App Store</a>
   </div>
-  <script>
-    (function () {
-      var qs = window.location.search || '';
-      var deepLink = 'wick://spark/rescue' + qs;
-      document.getElementById('openBtn').setAttribute('href', deepLink);
-      window.location.href = deepLink;
-    })();
-  </script>
 </body>
 </html>

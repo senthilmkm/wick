@@ -1,4 +1,5 @@
 import { requireOptionalNativeModule } from 'expo-modules-core';
+import { parseSparkShareCreate, SharedSparkRequest, SparkShareCreateResult } from '../engine/circleFlow';
 import { FriendCandle } from '../types/wick';
 import { CloudKitDriver } from './cloudKitService';
 
@@ -27,7 +28,12 @@ export interface WickNativeSpec {
     streakDays: number,
     updatedAt: number
   ): Promise<boolean>;
-  createFriendShareUrl(): Promise<string>;
+  createFriendShareUrl(
+    displayName: string,
+    state: string,
+    flameIntensity: number,
+    streakDays: number
+  ): Promise<string>;
   acceptFriendShareUrl(shareUrl: string): Promise<boolean>;
   fetchSharedFriendCandles(): Promise<FriendCandle[]>;
   createSparkShareRecord?(
@@ -35,10 +41,22 @@ export interface WickNativeSpec {
     senderName: string,
     stepsRequired: number,
     expiresAt: number
-  ): Promise<string>;
+  ): Promise<unknown>;
   acceptShareUrlWithKind?(shareUrl: string): Promise<SparkShareAcceptanceResult>;
   completeSparkShareRecord?(sparkId: string, stepsWalked: number): Promise<boolean>;
   checkPendingSparkRescues?(): Promise<CompletedSparkRescueInfo[]>;
+  fetchSharedPendingSparks?(): Promise<SharedSparkRequest[]>;
+  deleteCompletedSparkRecords?(sparkIds: string[]): Promise<boolean>;
+  sendNudge?(
+    ownerName: string,
+    nudgeId: string,
+    fromName: string,
+    message: string,
+    createdAt: number
+  ): Promise<boolean>;
+  fetchNudges?(): Promise<{ nudgeId: string; fromName: string; message: string; createdAt: number }[]>;
+  deleteNudgeRecords?(nudgeIds: string[]): Promise<boolean>;
+  writeFriendWidgetSnapshot?(jsonPayload: string): void;
   peekShareUrlKind?(shareUrl: string): Promise<SparkShareAcceptanceResult>;
   fetchOrCreateTrialAnchor?(): Promise<{
     createdAtMs?: number;
@@ -90,16 +108,52 @@ export async function createNativeSparkShareUrl(
   senderName: string,
   stepsRequired: number,
   expiresAt: number
-): Promise<string | null> {
+): Promise<SparkShareCreateResult | null> {
   const mod = getNativeModule();
   if (!mod?.createSparkShareRecord) {
     return null;
   }
   try {
-    const url = await mod.createSparkShareRecord(sparkId, senderName, stepsRequired, expiresAt);
-    return url.length > 0 ? url : null;
+    const raw = await mod.createSparkShareRecord(sparkId, senderName, stepsRequired, expiresAt);
+    return parseSparkShareCreate(raw);
   } catch {
     return null;
+  }
+}
+
+export async function fetchNativeSharedPendingSparks(): Promise<SharedSparkRequest[]> {
+  const mod = getNativeModule();
+  if (!mod?.fetchSharedPendingSparks) {
+    return [];
+  }
+  try {
+    const rows = await mod.fetchSharedPendingSparks();
+    if (!Array.isArray(rows)) {
+      return [];
+    }
+    return rows.filter(
+      (row) =>
+        !!row &&
+        typeof row.sparkId === 'string' &&
+        row.sparkId.length > 0 &&
+        typeof row.senderName === 'string' &&
+        typeof row.stepsRequired === 'number' &&
+        typeof row.expiresAt === 'number'
+    );
+  } catch {
+    return [];
+  }
+}
+
+export async function deleteNativeNudges(nudgeIds: string[]): Promise<boolean> {
+  const mod = getNativeModule();
+  if (!mod?.deleteNudgeRecords || nudgeIds.length === 0) {
+    return false;
+  }
+  try {
+    return await mod.deleteNudgeRecords(nudgeIds);
+  } catch {
+    return false;
   }
 }
 
@@ -202,6 +256,70 @@ export async function completeNativeSparkShare(
   }
 }
 
+export function writeNativeFriendWidgetSnapshot(jsonPayload: string): void {
+  try {
+    getNativeModule()?.writeFriendWidgetSnapshot?.(jsonPayload);
+  } catch {
+    // Graceful no-op in Jest/web/unlinked builds
+  }
+}
+
+export async function deleteNativeCompletedSparks(sparkIds: string[]): Promise<boolean> {
+  const mod = getNativeModule();
+  if (!mod?.deleteCompletedSparkRecords || sparkIds.length === 0) {
+    return false;
+  }
+  try {
+    return await mod.deleteCompletedSparkRecords(sparkIds);
+  } catch {
+    return false;
+  }
+}
+
+export interface IncomingNudge {
+  nudgeId: string;
+  fromName: string;
+  message: string;
+  createdAt: number;
+}
+
+export async function sendNativeNudge(input: {
+  ownerName: string;
+  nudgeId: string;
+  fromName: string;
+  message: string;
+  createdAt: number;
+}): Promise<boolean> {
+  const mod = getNativeModule();
+  if (!mod?.sendNudge) {
+    return false;
+  }
+  try {
+    return await mod.sendNudge(
+      input.ownerName,
+      input.nudgeId,
+      input.fromName,
+      input.message,
+      input.createdAt
+    );
+  } catch {
+    return false;
+  }
+}
+
+export async function fetchNativeNudges(): Promise<IncomingNudge[]> {
+  const mod = getNativeModule();
+  if (!mod?.fetchNudges) {
+    return [];
+  }
+  try {
+    const rows = await mod.fetchNudges();
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function checkNativePendingSparkRescues(): Promise<CompletedSparkRescueInfo[]> {
   const mod = getNativeModule();
   if (!mod?.checkPendingSparkRescues) {
@@ -240,12 +358,17 @@ export function createNativeCloudKitDriver(): CloudKitDriver {
         payload.updatedAt
       );
     },
-    createFriendShareUrl: async () => {
+    createFriendShareUrl: async (candle) => {
       const mod = getNativeModule();
       if (!mod) {
         return '';
       }
-      return mod.createFriendShareUrl();
+      return mod.createFriendShareUrl(
+        candle.displayName,
+        candle.state,
+        candle.flameIntensity,
+        candle.streakDays
+      );
     },
     fetchSharedFriendCandles: async () => {
       const mod = getNativeModule();

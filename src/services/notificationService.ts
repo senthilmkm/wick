@@ -58,6 +58,24 @@ export function scheduleMorningWakeNotification(settings: UserSettings): Promise
   return scheduleQueue;
 }
 
+export async function presentNudgeNotification(fromName: string, message: string): Promise<void> {
+  try {
+    const granted = await requestNotificationPermission();
+    if (!granted) {
+      return;
+    }
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: `${fromName} nudged your wick`,
+        body: message,
+      },
+      trigger: null,
+    });
+  } catch {
+    // A missed banner must not block the in-app toast.
+  }
+}
+
 export async function notifySmokingGraceIfNeeded(
   prevState: CandleState,
   nextState: CandleState

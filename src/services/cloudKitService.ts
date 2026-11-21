@@ -9,7 +9,12 @@ export interface CloudKitDriver {
     streakDays: number;
     updatedAt: number;
   }): Promise<void>;
-  createFriendShareUrl(): Promise<string>;
+  createFriendShareUrl(candle: {
+    displayName: string;
+    state: string;
+    flameIntensity: number;
+    streakDays: number;
+  }): Promise<string>;
   fetchSharedFriendCandles(): Promise<FriendCandle[]>;
 }
 
@@ -53,12 +58,18 @@ export class CloudKitCircleService {
     return true;
   }
 
-  async inviteFriendToLockScreen(): Promise<string | null> {
+  async inviteFriendToLockScreen(candle: {
+    displayName: string;
+    state: string;
+    flameIntensity: number;
+    streakDays: number;
+  }): Promise<string | null> {
     const signedIn = await this.driver.isICloudSignedIn();
     if (!signedIn) {
       return null;
     }
-    return this.driver.createFriendShareUrl();
+    const url = await this.driver.createFriendShareUrl(candle);
+    return url.length > 0 ? url : null;
   }
 
   async refreshFriendCandles(): Promise<FriendCandle[]> {

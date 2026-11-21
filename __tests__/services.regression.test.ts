@@ -355,7 +355,12 @@ describe('themes, storage, motion, audio, export & CloudKit regression tests', (
 
     const snap = createMorningSnapshot('2026-11-18', 1000, 5, 0, 0);
     expect(await ck.syncOwnCandleIfNeeded('Alex', snap, 1000)).toBe(false);
-    expect(await ck.inviteFriendToLockScreen()).toBeNull();
+    expect(await ck.inviteFriendToLockScreen({
+      displayName: 'Alex',
+      state: 'BLAZING',
+      flameIntensity: 1,
+      streakDays: 5,
+    })).toBeNull();
     expect(await ck.refreshFriendCandles()).toEqual([]);
 
     signedIn = true;
@@ -364,7 +369,12 @@ describe('themes, storage, motion, audio, export & CloudKit regression tests', (
     expect(await ck.syncOwnCandleIfNeeded('Alex', snap, 2500, true)).toBe(true);
     expect(await ck.syncOwnCandleIfNeeded('Alex', snap, 2500 + 15 * 60 * 1000)).toBe(true);
     expect(upserts).toBe(3);
-    expect(await ck.inviteFriendToLockScreen()).toBe('https://icloud.com/share/wick-1');
+    expect(await ck.inviteFriendToLockScreen({
+      displayName: 'Alex',
+      state: 'BLAZING',
+      flameIntensity: 1,
+      streakDays: 5,
+    })).toBe('https://icloud.com/share/wick-1');
     expect(await ck.refreshFriendCandles()).toHaveLength(1);
   });
 

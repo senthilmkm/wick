@@ -11,7 +11,7 @@ const PAIR_STEPS = [
   },
   {
     step: '2. Send Your Invite',
-    body: 'Tap "+ Pair Widget" and text your link to your friend via Messages or AirDrop.',
+    body: 'Tap "+ Pair Widget". Wick sends an iCloud link. Both phones need to be signed in to iCloud.',
   },
   {
     step: '3. Pair Both Ways',
@@ -19,11 +19,11 @@ const PAIR_STEPS = [
   },
   {
     step: '4. Add the Lock Screen Widget',
-    body: 'Long-press your iPhone Lock Screen -> Customize -> Add Widgets -> Wick to watch your candle live.',
+    body: 'Add the Wick widget from the lock screen. After a friend accepts your iCloud invite, that widget shows their candle. With nobody paired, it shows yours.',
   },
   {
     step: '5. Nudge & Ask for Spark (500 Steps)',
-    body: 'Tap "Nudge" anytime to cheer a friend on. If you need help keeping your flame alive, tap "Ask for Spark (500 Steps)" in Circle (or "Ask Spark" on Flame when fading) and text them the link — once they walk 500 steps, Wick syncs via iCloud and automatically reignites your candle!',
+    body: 'Tap Nudge to cheer a paired friend inside Wick. If your flame is low, tap Ask for Spark. A paired friend sees the rescue in Circle. Someone who is not paired yet gets an iCloud link.',
   },
 ];
 
@@ -32,6 +32,7 @@ interface CircleScreenProps {
   activeRescue: ActiveSparkRescue | null;
   theme: WickTheme;
   onInviteFriend: () => void;
+  canAskSpark: boolean;
   onSendSpark: () => void;
   onNudgeFriend?: (friend: FriendCandle) => void;
   onDismissRescue?: () => void;
@@ -43,6 +44,7 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
   activeRescue,
   theme,
   onInviteFriend,
+  canAskSpark,
   onSendSpark,
   onNudgeFriend,
   onDismissRescue,
@@ -82,24 +84,30 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
         </View>
       </View>
 
-      <View style={styles.sparkAskCard}>
-        <View style={styles.sparkAskInfo}>
-          <Text style={[styles.sparkAskTitle, { color: theme.primaryText }]}>
-            Ask a Friend for Spark
-          </Text>
-          <Text style={styles.sparkAskBody}>
-            Text any friend a rescue link — when they walk 500 steps, your candle reignites.
-          </Text>
+      {canAskSpark ? (
+        <View style={styles.sparkAskCard}>
+          <View style={styles.sparkAskInfo}>
+            <Text style={[styles.sparkAskTitle, { color: theme.primaryText }]}>
+              Ask a Friend for Spark
+            </Text>
+            <Text style={styles.sparkAskBody}>
+              A paired friend sees this in Wick and can walk 500 steps. If you are not paired yet, Wick opens an iCloud link you can send.
+            </Text>
+          </View>
+          <Pressable
+            style={styles.sparkAskBtn}
+            onPress={onSendSpark}
+            accessibilityRole="button"
+            accessibilityLabel="Ask for Spark 500 steps"
+          >
+            <Text style={styles.sparkAskBtnText}>Ask for Spark (500 Steps)</Text>
+          </Pressable>
         </View>
-        <Pressable
-          style={styles.sparkAskBtn}
-          onPress={onSendSpark}
-          accessibilityRole="button"
-          accessibilityLabel="Ask for Spark 500 steps"
-        >
-          <Text style={styles.sparkAskBtnText}>Ask for Spark (500 Steps)</Text>
-        </Pressable>
-      </View>
+      ) : (
+        <Text style={styles.sparkWaiting}>
+          Ask for Spark appears when your flame is flickering, an ember, smoking, or out.
+        </Text>
+      )}
 
       {activeRescue && (
         <View style={styles.rescueCard}>
@@ -127,7 +135,7 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
             Multiplayer Lock Screen Widgets
           </Text>
           <Text style={styles.emptyBody}>
-            Pair a partner or friend via iCloud Share to keep their candle on your iOS Lock Screen.
+            Pair through iCloud. The lock screen widget then shows their candle. The round widget keeps your streak.
           </Text>
         </View>
       ) : (
@@ -250,6 +258,7 @@ const styles = StyleSheet.create({
   sparkAskInfo: { gap: 3 },
   sparkAskTitle: { fontSize: 15, fontWeight: '700' },
   sparkAskBody: { color: '#D4D4D8', fontSize: 12, lineHeight: 17 },
+  sparkWaiting: { color: '#A1A1AA', fontSize: 13, lineHeight: 18 },
   sparkAskBtn: {
     backgroundColor: '#FF9F43',
     borderRadius: 12,
