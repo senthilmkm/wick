@@ -1,4 +1,5 @@
 import { createMorningSnapshot } from '../src/engine/candleStateMachine';
+import { flameCoachLine, TAB_HINTS, WELCOME_LINES, WELCOME_TITLE } from '../src/engine/firstRunCopy';
 import {
   adjustDailyGoal,
   buildOnboardingSettings,
@@ -28,16 +29,32 @@ describe('onboarding flow regression', () => {
   const morning = () => createMorningSnapshot('2026-11-20', now.getTime(), 0, 0, 1);
 
   it('walks every step forward and back without leaving the flow', () => {
-    expect(ONBOARDING_STEPS).toEqual(['vibe', 'goal', 'name', 'schedule', 'permissions']);
+    expect(ONBOARDING_STEPS).toEqual(['welcome', 'goal', 'permissions']);
+    expect(ONBOARDING_STEP_META.welcome.title).toBe(WELCOME_TITLE);
+    expect(WELCOME_LINES).toEqual([
+      'Walk, and the candle stays bright.',
+      'Sit too long, and it fades.',
+      'A finished day becomes wax.',
+    ]);
     expect(ONBOARDING_STEP_META.permissions.continueLabel).toBe('Light My Candle');
     let step: OnboardingStep = ONBOARDING_STEPS[0];
-    expect(moveOnboardingStep(step, -1)).toBe('vibe');
+    expect(moveOnboardingStep(step, -1)).toBe('welcome');
     for (const expected of ONBOARDING_STEPS.slice(1)) {
       step = moveOnboardingStep(step, 1);
       expect(step).toBe(expected);
     }
     expect(moveOnboardingStep('permissions', 1)).toBe('permissions');
-    expect(moveOnboardingStep('name', -1)).toBe('goal');
+    expect(moveOnboardingStep('permissions', -1)).toBe('goal');
+    expect(flameCoachLine('UNLIT_MORNING')).toBe('Tap the lighter, or take 5 steps.');
+    expect(flameCoachLine('NIGHT_SLEEP')).toBe('Tap the lighter, or take 5 steps.');
+    expect(flameCoachLine('BLAZING')).toBe(
+      'Walk to keep it bright. Tap the candle for your pace. Hold it for night and rest.'
+    );
+    expect(TAB_HINTS).toEqual({
+      ledger: 'Past days, saved as wax.',
+      circle: 'One friend. Send one invite.',
+      sanctuary: 'Look, reminders, and sleep live here.',
+    });
   });
 
   it('keeps a goal selected inside the allowed range, including custom values', () => {

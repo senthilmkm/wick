@@ -21,6 +21,7 @@ import {
   TIME_STEP_MINUTES,
 } from '../constants/limits';
 import { THEME_LIST } from '../constants/themes';
+import { FirstHint } from '../components/FirstHint';
 import { canUseTheme } from '../engine/trialGuard';
 import { EntitlementState, ThemeId, UserSettings, WickTheme } from '../types/wick';
 
@@ -38,6 +39,8 @@ interface SanctuaryScreenProps {
   onUpgradePro: () => void;
   onResetData?: () => void;
   onDebugInjectSteps?: (delta: number) => void;
+  hint?: string | null;
+  onDismissHint?: () => void;
 }
 
 export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
@@ -54,6 +57,8 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
   onUpgradePro,
   onResetData,
   onDebugInjectSteps,
+  hint = null,
+  onDismissHint,
 }) => {
   const insets = useSafeAreaInsets();
   const [devTapCount, setDevTapCount] = useState(0);
@@ -71,6 +76,7 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
       ]}
     >
       <Text style={[styles.title, { color: theme.primaryText }]}>Sanctuary</Text>
+      {hint && onDismissHint ? <FirstHint text={hint} onDismiss={onDismissHint} /> : null}
 
       {/* Background Themes */}
       <Text style={styles.sectionLabel}>Background Theme</Text>

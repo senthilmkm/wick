@@ -26,6 +26,8 @@ interface FlameScreenProps {
   onRemoveGlassDome: () => void;
   onBlowOutNight: () => void;
   onToggleControlsVisibility: () => void;
+  coachLine?: string | null;
+  onDismissCoach?: () => void;
 }
 
 export const FlameScreen: React.FC<FlameScreenProps> = ({
@@ -46,6 +48,8 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
   onRemoveGlassDome,
   onBlowOutNight,
   onToggleControlsVisibility,
+  coachLine = null,
+  onDismissCoach,
 }) => {
   const insets = useSafeAreaInsets();
   const [showPacePill, setShowPacePill] = useState(false);
@@ -93,6 +97,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
     snapshot.state === 'EXTINGUISHED';
 
   const handleTapCandle = () => {
+    onDismissCoach?.();
     setShowPacePill((prev) => !prev);
     onToggleControlsVisibility();
   };
@@ -160,12 +165,18 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
             onPress={() => setShowInfoModal(true)}
             accessible
             accessibilityRole="button"
-            accessibilityLabel="How Wick works and feature guide"
+            accessibilityLabel="How it works"
           >
-            <Text style={[styles.infoCircleText, { color: theme.primaryText }]}>i</Text>
+            <Text style={[styles.howItWorks, { color: theme.primaryText }]}>How it works</Text>
           </Pressable>
         </View>
       </View>
+
+      {coachLine ? (
+        <Pressable onPress={onDismissCoach} accessibilityRole="button" accessibilityLabel={coachLine}>
+          <Text style={styles.coachLine}>{coachLine}</Text>
+        </Pressable>
+      ) : null}
 
       {/* Single-Page Hero: 90% Interactive 3D Candle */}
       <Pressable
@@ -196,7 +207,10 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
               styles.lighterDevice,
               pressed && { transform: [{ scale: 0.94 }, { translateY: 2 }] },
             ]}
-            onPress={onStrikeLighter}
+            onPress={() => {
+              onDismissCoach?.();
+              onStrikeLighter();
+            }}
             accessible
             accessibilityRole="button"
             accessibilityLabel="Strike pocket lighter to ignite your candle"
@@ -369,6 +383,18 @@ const styles = StyleSheet.create({
     color: '#A1A1AA',
     fontSize: 11,
     fontWeight: '500',
+  },
+  coachLine: {
+    color: '#F5F5F7',
+    fontSize: 15,
+    lineHeight: 21,
+    marginTop: 12,
+    marginRight: 8,
+  },
+  howItWorks: {
+    fontSize: 13,
+    fontWeight: '600',
+    paddingHorizontal: 4,
   },
   topRightActions: {
     flexDirection: 'row',

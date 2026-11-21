@@ -7,16 +7,13 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { TIME_STEP_MINUTES, formatHourMinute, shiftClockMinutes } from '../constants/limits';
-import { THEME_LIST } from '../constants/themes';
+import { WELCOME_LINES } from '../engine/firstRunCopy';
 import {
   GOAL_PRESETS,
-  NAME_PRESETS,
   ONBOARDING_STEP_META,
   ONBOARDING_STEPS,
   OnboardingCompletion,
@@ -24,13 +21,9 @@ import {
   PermissionKind,
   PermissionStepResult,
   adjustDailyGoal,
-  canAdvanceFromName,
-  eveningNudgeClock,
   goalPresetSelection,
   goalSelectionLabel,
-  matchingNamePreset,
   moveOnboardingStep,
-  nameSelectionLabel,
   permissionOutcomeLabel,
   resolveThemeId,
   resolvedCandleName,
@@ -64,14 +57,8 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const compact = height < 700;
-  const [step, setStep] = useState<OnboardingStep>('vibe');
-  const [themeId, setThemeId] = useState<ThemeId>(() => resolveThemeId(initialThemeId));
+  const [step, setStep] = useState<OnboardingStep>('welcome');
   const [goal, setGoal] = useState(() => adjustDailyGoal(initialGoal, 0));
-  const [candleName, setCandleName] = useState(initialCandleName);
-  const [wakeHour, setWakeHour] = useState(initialWakeHour);
-  const [wakeMinute, setWakeMinute] = useState(initialWakeMinute);
-  const [sleepHour, setSleepHour] = useState(initialSleepHour);
-  const [sleepMinute, setSleepMinute] = useState(initialSleepMinute);
   const [asking, setAsking] = useState<PermissionKind | null>(null);
   const [permissionResult, setPermissionResult] = useState<PermissionStepResult | null>(null);
   const permissionStarted = useRef(false);
@@ -111,11 +98,8 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
 
   const stepNumber = ONBOARDING_STEPS.indexOf(step) + 1;
   const meta = ONBOARDING_STEP_META[step];
-  const nameReady = canAdvanceFromName(candleName);
-  const canContinue = step === 'name' ? nameReady : step === 'permissions' ? permissionResult !== null && asking === null : true;
-  const nudge = eveningNudgeClock(sleepHour, sleepMinute);
+  const canContinue = step === 'permissions' ? permissionResult !== null && asking === null : true;
   const selectedGoal = goalPresetSelection(goal);
-  const selectedName = matchingNamePreset(candleName);
 
   const finish = () => {
     if (!permissionResult || finishing.current) {
@@ -123,13 +107,13 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
     }
     finishing.current = true;
     onComplete({
-      themeId,
+      themeId: resolveThemeId(initialThemeId),
       dailyStepGoal: goal,
-      candleName: resolvedCandleName(candleName),
-      wakeHour,
-      wakeMinute,
-      sleepHour,
-      sleepMinute,
+      candleName: resolvedCandleName(initialCandleName) || 'Wick',
+      wakeHour: initialWakeHour,
+      wakeMinute: initialWakeMinute,
+      sleepHour: initialSleepHour,
+      sleepMinute: initialSleepMinute,
       healthSteps: permissionResult.healthSteps,
     });
   };
@@ -173,35 +157,18 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
             Step {stepNumber} of {ONBOARDING_STEPS.length}
           </Text>
           <Text style={styles.headline}>{meta.title}</Text>
-          {step === 'vibe' && (
+          {step === 'welcome' && (
             <>
-              <Text style={styles.body}>
-                This is the look behind your candle. All six are open for the next 72 hours. After that,
-                Obsidian Night stays free.
-              </Text>
-              <View style={styles.themeGrid}>
-                {THEME_LIST.map((theme) => {
-                  const selected = theme.id === themeId;
-                  return (
-                    <Pressable
-                      key={theme.id}
-                      style={[styles.themeChip, selected && styles.choiceActive]}
-                      onPress={() => setThemeId(theme.id)}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                      accessibilityLabel={theme.name}
-                    >
-                      <View style={[styles.swatch, { backgroundColor: theme.accent }]} />
-                      <Text style={[styles.choiceText, selected && styles.choiceTextActive]}>{theme.name}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
+              {WELCOME_LINES.map((line) => (
+                <Text key={line} style={styles.body}>
+                  {line}
+                </Text>
+              ))}
             </>
           )}
           {step === 'goal' && (
             <>
-              <Text style={styles.body}>Your candle paces against this daily step goal.</Text>
+              <Text style={styles.body}>Your candle follows this daily step goal.</Text>
               <View style={styles.presetRow}>
                 {GOAL_PRESETS.map((preset) => {
                   const selected = selectedGoal === preset;
@@ -241,76 +208,10 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
               <Text style={styles.selectedLabel}>{goalSelectionLabel(goal)}</Text>
             </>
           )}
-          {step === 'name' && (
-            <>
-              <Text style={styles.body}>Friends see this name in Circle. It is required.</Text>
-              <TextInput
-                style={styles.nameInput}
-                value={candleName}
-                onChangeText={(value) => setCandleName(value.slice(0, 12))}
-                placeholder="Name your candle"
-                placeholderTextColor="#71717A"
-                maxLength={12}
-                returnKeyType="next"
-                onSubmitEditing={goForward}
-                accessibilityLabel="Candle name"
-              />
-              <View style={styles.presetRow}>
-                {NAME_PRESETS.map((preset) => {
-                  const selected = selectedName === preset;
-                  return (
-                    <Pressable
-                      key={preset}
-                      style={[styles.presetBtn, selected && styles.choiceActive]}
-                      onPress={() => setCandleName(preset)}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                      accessibilityLabel={preset}
-                    >
-                      <Text style={[styles.choiceText, selected && styles.choiceTextActive]}>{preset}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              <Text style={styles.selectedLabel}>{nameSelectionLabel(candleName)}</Text>
-            </>
-          )}
-          {step === 'schedule' && (
-            <>
-              <Text style={styles.body}>
-                These times set the morning reminder and the evening nudge, 90 minutes before sleep.
-              </Text>
-              <ClockRow
-                label="Wake"
-                hour={wakeHour}
-                minute={wakeMinute}
-                onShift={(delta) => {
-                  const next = shiftClockMinutes(wakeHour, wakeMinute, delta);
-                  setWakeHour(next.hour);
-                  setWakeMinute(next.minute);
-                }}
-              />
-              <ClockRow
-                label="Sleep"
-                hour={sleepHour}
-                minute={sleepMinute}
-                onShift={(delta) => {
-                  const next = shiftClockMinutes(sleepHour, sleepMinute, delta);
-                  setSleepHour(next.hour);
-                  setSleepMinute(next.minute);
-                }}
-              />
-              <Text style={styles.selectedLabel}>
-                Morning reminder {formatHourMinute(wakeHour, wakeMinute)} · Evening nudge{' '}
-                {formatHourMinute(nudge.hour, nudge.minute)}
-              </Text>
-            </>
-          )}
           {step === 'permissions' && (
             <>
               <Text style={styles.body}>
-                Wick asks for Health, then Motion, then notifications. You can still light the candle if
-                you say no. The microphone is used only later, when you blow the flame out.
+                Wick needs your steps. Reminders are optional. You can still light the candle if you say no.
               </Text>
               {(['health', 'motion', 'notifications'] as const).map((kind) => (
                 <Text key={kind} style={styles.permissionLine}>
@@ -329,7 +230,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
           )}
         </ScrollView>
         <View style={styles.footer}>
-          {step !== 'vibe' && (
+          {step !== 'welcome' && (
             <Pressable
               style={styles.backBtn}
               onPress={goBack}
@@ -354,36 +255,6 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
     </KeyboardAvoidingView>
   );
 };
-
-const ClockRow: React.FC<{
-  label: string;
-  hour: number;
-  minute: number;
-  onShift: (deltaMinutes: number) => void;
-}> = ({ label, hour, minute, onShift }) => (
-  <View style={styles.goalPicker}>
-    <Pressable
-      style={styles.stepBtn}
-      onPress={() => onShift(-TIME_STEP_MINUTES)}
-      accessibilityRole="button"
-      accessibilityLabel={`Earlier ${label}`}
-    >
-      <Text style={styles.stepBtnText}>-</Text>
-    </Pressable>
-    <View style={styles.clockReadout}>
-      <Text style={styles.clockLabel}>{label}</Text>
-      <Text style={styles.goalNum}>{formatHourMinute(hour, minute)}</Text>
-    </View>
-    <Pressable
-      style={styles.stepBtn}
-      onPress={() => onShift(TIME_STEP_MINUTES)}
-      accessibilityRole="button"
-      accessibilityLabel={`Later ${label}`}
-    >
-      <Text style={styles.stepBtnText}>+</Text>
-    </Pressable>
-  </View>
-);
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#0A0A0C' },

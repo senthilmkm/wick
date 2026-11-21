@@ -90,35 +90,39 @@ const FLAME_FLAVORS: FlameFlavor[] = [
 
 const GUIDE_ITEMS = [
   {
-    title: '1. Morning Ignition',
-    body: 'Tap the pocket lighter or take your first 5 steps of the day to strike the match and light your candle.',
+    title: 'Light it',
+    body: 'Tap the lighter, or take 5 steps.',
   },
   {
-    title: '2. Tap & Long-Press Controls',
-    body: 'Tap the candle anytime to peek your live step count and pace %. Long-press the candle to Blow Out for Night or Drop a Glass Dome.',
+    title: 'Keep it bright',
+    body: 'Walk. Sit too long and the flame fades.',
   },
   {
-    title: '3. Evening Comeback (Smoking Grace)',
-    body: 'Busy day? Your candle stays in Smoking Grace until midnight—walk 350 brisk steps (or get a friend’s Spark) to reignite without losing your streak.',
+    title: 'Your pace',
+    body: 'Tap the candle to see your steps. Hold it for night or a rest day.',
   },
   {
-    title: '4. Night Mode & Wax Streaks',
-    body: 'Blow out your candle at bedtime (or enable iOS Sleep Focus Sync) to freeze decay. Every completed day cools into a permanent colored wax band in your Wax Ledger.',
+    title: 'A missed day',
+    body: 'Walk 350 steps before midnight, or ask a friend for a Spark.',
   },
   {
-    title: '5. Glass Dome (24h Rest Pause)',
-    body: 'Your first Glass Dome is free and pauses the candle for 24 hours. Further domes are part of Wick Pro, paid for with 300g of wax.',
+    title: 'Night',
+    body: 'Blow it out at bedtime. The day cools into wax.',
   },
   {
-    title: '6. 500-Step Spark Rescue & Circle',
-    body: 'Tap Ask for Spark in Circle (or Ask Spark on Flame when low) to text a friend a rescue link. When they walk 500 steps for you, your candle reignites.',
+    title: 'Rest day',
+    body: 'The first Glass Dome is free. It pauses the candle for a day.',
   },
   {
-    title: '7. 100% Local-First Privacy',
-    body: 'All Apple Health steps, themes, and streak logs stay privately on your iPhone—no accounts, no cloud health storage.',
+    title: 'A friend',
+    body: 'Nudge sends a text. Ask for Spark is a 500-step rescue when a friend is paired. With nobody paired, it sends a text.',
   },
   {
-    title: '8. Share Card',
+    title: 'Private',
+    body: 'Your steps stay on this iPhone.',
+  },
+  {
+    title: 'Share',
     body: SHARE_CARD_GUIDE_BODY,
   },
 ];
@@ -153,11 +157,8 @@ export const InfoModal: React.FC<InfoModalProps> = ({ visible, onClose }) => {
           <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
             {/* Interactive Candle Flame Flavors Preview */}
             <View style={styles.flavorCard}>
-              <Text style={styles.flavorHeader}>Tap to preview candle flavors by pace %</Text>
-              <Text style={styles.paceExplainer}>
-                Pace % compares your steps so far today against where you should be between your Wake
-                and Sleep hours.
-              </Text>
+              <Text style={styles.flavorHeader}>Tap a flame to see your pace.</Text>
+              <Text style={styles.paceExplainer}>Pace is how your steps compare with the day so far.</Text>
               <View style={styles.previewRow}>
                 <Canvas style={styles.miniCanvas}>
                   {flavor.intensity > 0 ? (

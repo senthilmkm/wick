@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FirstHint } from '../components/FirstHint';
 import { ActiveSparkRescue, FriendCandle, WickTheme } from '../types/wick';
 
 const PAIR_STEPS = [
@@ -33,6 +34,8 @@ interface CircleScreenProps {
   onNudgeFriend?: (friend: FriendCandle) => void;
   onDismissRescue?: () => void;
   onRemoveFriend?: (friendId: string) => void;
+  hint?: string | null;
+  onDismissHint?: () => void;
 }
 
 export const CircleScreen: React.FC<CircleScreenProps> = ({
@@ -45,6 +48,8 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
   onNudgeFriend,
   onDismissRescue,
   onRemoveFriend,
+  hint = null,
+  onDismissHint,
 }) => {
   const insets = useSafeAreaInsets();
   const [infoVisible, setInfoVisible] = useState(false);
@@ -75,10 +80,12 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
             accessibilityRole="button"
             accessibilityLabel="How inviting a friend works"
           >
-            <Text style={styles.infoBtnText}>i</Text>
+            <Text style={styles.infoBtnText}>Help</Text>
           </Pressable>
         </View>
       </View>
+
+      {hint && onDismissHint ? <FirstHint text={hint} onDismiss={onDismissHint} /> : null}
 
       {canAskSpark ? (
         <View style={styles.sparkAskCard}>
@@ -87,7 +94,7 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
               Ask a Friend for Spark
             </Text>
             <Text style={styles.sparkAskBody}>
-              A paired friend gets a 500-step rescue in Wick. With nobody paired yet, Wick opens a text you can send.
+              A paired friend walks 500 steps in Wick. With nobody paired, this opens a text.
             </Text>
           </View>
           <Pressable
@@ -235,14 +242,14 @@ const styles = StyleSheet.create({
   inviteBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16 },
   inviteText: { color: '#0A0A0C', fontWeight: '700', fontSize: 13 },
   infoBtn: {
-    width: 30,
-    height: 30,
+    minHeight: 30,
     borderRadius: 15,
+    paddingHorizontal: 10,
     backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  infoBtnText: { color: '#F5F5F7', fontSize: 14, fontWeight: '700', fontStyle: 'italic' },
+  infoBtnText: { color: '#F5F5F7', fontSize: 13, fontWeight: '600' },
   sparkAskCard: {
     backgroundColor: 'rgba(255, 159, 67, 0.1)',
     borderWidth: 1,

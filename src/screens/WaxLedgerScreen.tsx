@@ -10,6 +10,7 @@ import {
 } from '../engine/candleMath';
 import { getVisibleLedgerLimit } from '../engine/trialGuard';
 import { SHARE_WEEK_CARD_BUTTON_TITLE, WEEK_CARD_BUTTON_TITLE } from '../services/shareCardService';
+import { FirstHint } from '../components/FirstHint';
 import { CandleMood, EntitlementState, WaxLayer, WickTheme } from '../types/wick';
 
 const MILESTONES = [
@@ -34,6 +35,8 @@ interface WaxLedgerScreenProps {
   onExportPdf: () => void;
   onUpgradePro: () => void;
   onShareWeek: (recap: WeeklyRecapSummary) => Promise<void>;
+  hint?: string | null;
+  onDismissHint?: () => void;
 }
 
 export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
@@ -51,6 +54,8 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
   onExportPdf,
   onUpgradePro,
   onShareWeek,
+  hint = null,
+  onDismissHint,
 }) => {
   const insets = useSafeAreaInsets();
   const [showRecap, setShowRecap] = useState(false);
@@ -82,6 +87,7 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
           <Text style={styles.subtitle}>
             {streakDays} day streak • {waxGrams}g wax earned
           </Text>
+          {hint && onDismissHint ? <FirstHint text={hint} onDismiss={onDismissHint} /> : null}
         </View>
         <View style={styles.headerActions}>
           <Pressable

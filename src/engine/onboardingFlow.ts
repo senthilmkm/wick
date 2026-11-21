@@ -7,7 +7,7 @@ import {
   igniteWithLighter,
 } from './candleStateMachine';
 
-export const ONBOARDING_STEPS = ['vibe', 'goal', 'name', 'schedule', 'permissions'] as const;
+export const ONBOARDING_STEPS = ['welcome', 'goal', 'permissions'] as const;
 
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 
@@ -16,11 +16,9 @@ export const GOAL_PRESETS = [5000, 8000, 10000] as const;
 export const NAME_PRESETS = ['Solace', 'Hearth', 'Ember', 'Dawn'] as const;
 
 export const ONBOARDING_STEP_META: Record<OnboardingStep, { title: string; continueLabel: string }> = {
-  vibe: { title: 'Pick a candle', continueLabel: 'Continue' },
+  welcome: { title: 'Keep your wick lit', continueLabel: 'Continue' },
   goal: { title: 'Daily step goal', continueLabel: 'Continue' },
-  name: { title: 'Name your candle', continueLabel: 'Continue' },
-  schedule: { title: 'Wake and sleep', continueLabel: 'Continue' },
-  permissions: { title: 'Allow steps and reminders', continueLabel: 'Light My Candle' },
+  permissions: { title: 'Allow steps', continueLabel: 'Light My Candle' },
 };
 
 export type PermissionKind = 'health' | 'motion' | 'notifications';

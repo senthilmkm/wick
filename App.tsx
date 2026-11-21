@@ -64,6 +64,7 @@ import {
   latchTrialExpiry,
   recordVideoExport,
 } from './src/engine/trialGuard';
+import { flameCoachLine, TAB_HINTS } from './src/engine/firstRunCopy';
 import { buildOnboardingSettings, finishOnboardingSnapshot } from './src/engine/onboardingFlow';
 import { earlierInstallStamp, proFromStoreStatus, resolveAuthoritativeNow } from './src/engine/trustedClock';
 import { CircleScreen } from './src/screens/CircleScreen';
@@ -186,6 +187,8 @@ const KEY_PRO_CACHE = 'wick.pro_cached.v1';
 const KEY_FRIENDS = 'wick.friends.v1';
 const KEY_REMOVED_FRIENDS = 'wick.removed_friends.v1';
 const KEY_VISITOR_ID = 'wick.visitor.candle.id';
+const KEY_FLAME_COACH = 'wick.coach.flame.v1';
+const KEY_SEEN_TABS = 'wick.hint.tabs.v1';
 const KEY_SEEN_NUDGES = 'wick.nudge.seen.v1';
 const KEY_HANDLED_SPARKS = 'wick.spark.handled.v1';
 const SECURE_ONBOARDED = 'wick_onboarded_v1';
@@ -271,6 +274,8 @@ function WickRoot() {
   const [hydrated, setHydrated] = useState<boolean>(() => mmkvInstance !== null);
   const [onboarded, setOnboarded] = useState<boolean>(() => kvGet(KEY_ONBOARDED) === '1');
   const [activeTab, setActiveTab] = useState<TabKey>('flame');
+  const [flameCoachOn, setFlameCoachOn] = useState(() => kvGet(KEY_FLAME_COACH) !== '1');
+  const [seenTabs, setSeenTabs] = useState<string[]>(() => readIdList(kvGet(KEY_SEEN_TABS)));
   const [tabsVisible, setTabsVisible] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [paywallReason, setPaywallReason] = useState<PaywallReason | null>(null);
@@ -1859,6 +1864,8 @@ function WickRoot() {
     reloadNativeWidgets();
     setActiveTab('flame');
     setShowMoodModal(false);
+    setFlameCoachOn(true);
+    setSeenTabs([]);
     setOnboarded(false);
     showToast('All local data reset.');
   };
@@ -1967,6 +1974,11 @@ function WickRoot() {
             void handleBlowOutWithMic();
           }}
           onToggleControlsVisibility={scheduleAutoHide}
+          coachLine={flameCoachOn ? flameCoachLine(snapshot.state) : null}
+          onDismissCoach={() => {
+            setFlameCoachOn(false);
+            kvSet(KEY_FLAME_COACH, '1');
+          }}
         />
       )}
 
@@ -1999,6 +2011,17 @@ function WickRoot() {
           }}
           onUpgradePro={() => setPaywallReason('ledger')}
           onShareWeek={(recap) => handleShareWeek(recap)}
+          hint={seenTabs.includes('ledger') ? null : TAB_HINTS.ledger}
+          onDismissHint={() => {
+            setSeenTabs((prev) => {
+              if (prev.includes('ledger')) {
+                return prev;
+              }
+              const next = [...prev, 'ledger'];
+              kvSet(KEY_SEEN_TABS, JSON.stringify(next));
+              return next;
+            });
+          }}
         />
       )}
 
@@ -2029,6 +2052,17 @@ function WickRoot() {
             rescueBaselineStepsRef.current = null;
           }}
           onRemoveFriend={handleRemoveFriend}
+          hint={seenTabs.includes('circle') ? null : TAB_HINTS.circle}
+          onDismissHint={() => {
+            setSeenTabs((prev) => {
+              if (prev.includes('circle')) {
+                return prev;
+              }
+              const next = [...prev, 'circle'];
+              kvSet(KEY_SEEN_TABS, JSON.stringify(next));
+              return next;
+            });
+          }}
         />
       )}
 
@@ -2072,6 +2106,17 @@ function WickRoot() {
             void handleResetLocalData();
           }}
           onDebugInjectSteps={handleDebugInjectSteps}
+          hint={seenTabs.includes('sanctuary') ? null : TAB_HINTS.sanctuary}
+          onDismissHint={() => {
+            setSeenTabs((prev) => {
+              if (prev.includes('sanctuary')) {
+                return prev;
+              }
+              const next = [...prev, 'sanctuary'];
+              kvSet(KEY_SEEN_TABS, JSON.stringify(next));
+              return next;
+            });
+          }}
         />
       )}
 
