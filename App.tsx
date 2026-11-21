@@ -67,6 +67,7 @@ import {
   recordVideoExport,
 } from './src/engine/trialGuard';
 import {
+  cameBackLine,
   celebrationLine,
   flameCoachLine,
   FREE_STAYS,
@@ -130,7 +131,7 @@ import {
   scheduleMorningWakeNotification,
 } from './src/services/notificationService';
 import { playMatchStrikeSound } from './src/services/soundService';
-import { createDefaultShareCardDriver, formatCardDate, ShareCardService } from './src/services/shareCardService';
+import { createDefaultShareCardDriver, ShareCardService } from './src/services/shareCardService';
 import { DEFAULT_SETTINGS, KEY_WAX_LAYERS, LocalStorageService } from './src/services/storageService';
 import { subscribeToTiltAngle } from './src/services/tiltService';
 import {
@@ -527,7 +528,7 @@ function WickRoot() {
           setLitByWalk(true);
         }
         const savedLine = res.completedDayLayer
-          ? savedDayLine(formatCardDate(res.completedDayLayer.date), res.completedDayLayer.stepsAchieved)
+          ? savedDayLine(settingsRef.current.candleName, res.completedDayLayer.stepsAchieved)
           : null;
         const moment = celebrationLine({
           band: streakBandLine(prev.streakDays, res.snapshot.streakDays),
@@ -2024,7 +2025,7 @@ function WickRoot() {
       setLitByWalk(true);
     }
     const savedLine = res.completedDayLayer
-      ? savedDayLine(formatCardDate(res.completedDayLayer.date), res.completedDayLayer.stepsAchieved)
+      ? savedDayLine(settings.candleName, res.completedDayLayer.stepsAchieved)
       : null;
     const moment = celebrationLine({
       band: streakBandLine(snapshot.streakDays, res.snapshot.streakDays),
@@ -2065,6 +2066,7 @@ function WickRoot() {
             trialExpired: accessReady ? entitlement.trialExpired : true,
           }, trustedNowMs)}
           onRainChange={handleRainChange}
+          onCameBack={() => showToast(cameBackLine(settings.candleName))}
           onStrikeLighter={() => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
             void playMatchStrikeSound(settings.soundEffectsEnabled, settings.liveBreezeEnabled);

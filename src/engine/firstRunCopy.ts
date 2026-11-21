@@ -166,9 +166,18 @@ export function celebrationLine(input: {
   return input.saved;
 }
 
-export function savedDayLine(dateLabel: string, steps: number): string {
+export function candleVoiceName(name: string | null | undefined): string {
+  const trimmed = name?.trim();
+  return trimmed ? trimmed : 'Wick';
+}
+
+export function cameBackLine(name: string | null | undefined): string {
+  return `${candleVoiceName(name)} waited. You came back.`;
+}
+
+export function savedDayLine(name: string | null | undefined, steps: number): string {
   const count = Number.isFinite(steps) ? Math.max(0, Math.round(steps)) : 0;
-  return `${dateLabel} is saved. ${count.toLocaleString('en-US')} steps.`;
+  return `${candleVoiceName(name)} kept yesterday. ${count.toLocaleString('en-US')} steps.`;
 }
 
 export function shouldShowLighter(

@@ -40,6 +40,7 @@ interface FlameScreenProps {
   trialLooks?: WickTheme[] | null;
   onSelectLook?: (themeId: ThemeId) => void;
   onRainChange?: (on: boolean) => void;
+  onCameBack?: () => void;
 }
 
 export const FlameScreen: React.FC<FlameScreenProps> = ({
@@ -66,6 +67,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
   trialLooks = null,
   onSelectLook,
   onRainChange,
+  onCameBack,
 }) => {
   const insets = useSafeAreaInsets();
   const [showActionsSheet, setShowActionsSheet] = useState(false);
@@ -76,6 +78,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
   const lastStepActivityAtRef = useRef(snapshot.updatedAt || Date.now());
   const rainStartStepsRef = useRef<number | null>(null);
   const rainStepsNeededRef = useRef<number | null>(null);
+  const cameBackRef = useRef(false);
 
   if (snapshot.dateKey !== lastDateKeyRef.current) {
     lastDateKeyRef.current = snapshot.dateKey;
@@ -103,6 +106,14 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
       stepsGained: snapshot.stepsToday - rainStartStepsRef.current,
       stepsNeeded: rainStepsNeededRef.current,
     });
+  if (
+    rainStartStepsRef.current != null &&
+    rainStepsNeededRef.current != null &&
+    !goalMet &&
+    rainClearedByWalk(snapshot.stepsToday - rainStartStepsRef.current, rainStepsNeededRef.current)
+  ) {
+    cameBackRef.current = true;
+  }
   if (rainStartStepsRef.current != null && !rainHeld) {
     rainStartStepsRef.current = null;
     rainStepsNeededRef.current = null;
@@ -132,6 +143,12 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
   useEffect(() => {
     onRainChange?.(rainOn);
   }, [rainOn, onRainChange]);
+
+  useEffect(() => {
+    if (!cameBackRef.current) return;
+    cameBackRef.current = false;
+    onCameBack?.();
+  });
 
   useEffect(() => {
     if (!rainOn || !settings.soundEffectsEnabled) {

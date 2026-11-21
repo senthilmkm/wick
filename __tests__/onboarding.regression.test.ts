@@ -17,6 +17,8 @@ import {
   nextStreakBandLine,
   RAIN_STILL_MS,
   rainNudgeOn,
+  cameBackLine,
+  candleVoiceName,
   savedDayLine,
   STEPS_OFF_LINE,
   streakBandLine,
@@ -140,8 +142,14 @@ describe('onboarding flow regression', () => {
     expect(CIRCLE_INVITE_SENT_BODY).toBe('Invite sent. They show up here when they open Wick.');
     expect(WICK_LIT_LINE).toBe('Your wick is lit.');
     expect(GOAL_FULL_LINE).toBe('Goal. The wick is full.');
-    expect(savedDayLine('Nov 20, 2026', 8200)).toBe('Nov 20, 2026 is saved. 8,200 steps.');
-    expect(savedDayLine('Nov 20, 2026', Number.NaN)).toBe('Nov 20, 2026 is saved. 0 steps.');
+    expect(candleVoiceName('Hearth')).toBe('Hearth');
+    expect(candleVoiceName('  ')).toBe('Wick');
+    expect(candleVoiceName(null)).toBe('Wick');
+    expect(candleVoiceName(undefined)).toBe('Wick');
+    expect(cameBackLine('Hearth')).toBe('Hearth waited. You came back.');
+    expect(cameBackLine('  ')).toBe('Wick waited. You came back.');
+    expect(savedDayLine('Hearth', 8200)).toBe('Hearth kept yesterday. 8,200 steps.');
+    expect(savedDayLine(null, Number.NaN)).toBe('Wick kept yesterday. 0 steps.');
     expect(streakBandLine(6, 7)).toBe('7 days. Bronze.');
     expect(streakBandLine(13, 14)).toBe('14 days. Silver.');
     expect(streakBandLine(29, 30)).toBe('30 days. Gold.');
