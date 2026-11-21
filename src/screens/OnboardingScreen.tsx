@@ -211,7 +211,7 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
           {step === 'permissions' && (
             <>
               <Text style={styles.body}>
-                Wick needs your steps. Reminders are optional. You can still light the candle if you say no.
+                Wick needs your steps to light the candle. Reminders are optional.
               </Text>
               {(['health', 'motion', 'notifications'] as const).map((kind) => (
                 <Text key={kind} style={styles.permissionLine}>

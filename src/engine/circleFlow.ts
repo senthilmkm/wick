@@ -119,6 +119,23 @@ export function friendListChanged(
   return false;
 }
 
+export function friendArrivalLine(name: string): string {
+  const trimmed = name.trim();
+  return `${trimmed.length > 0 ? trimmed : 'A friend'} is here.`;
+}
+
+export function nextFriendArrival(
+  seenIds: readonly string[],
+  friends: readonly { id: string; displayName: string }[]
+): { id: string; name: string } | null {
+  const seen = new Set(seenIds);
+  const fresh = friends.find((friend) => friend.id.trim().length > 0 && !seen.has(friend.id));
+  if (!fresh) {
+    return null;
+  }
+  return { id: fresh.id, name: fresh.displayName };
+}
+
 export function readIdList(raw: string | undefined): string[] {
   if (!raw) {
     return [];

@@ -6,6 +6,7 @@ jest.mock('@shopify/react-native-skia', () => ({
 jest.mock('react-native-share', () => ({ __esModule: true, default: { open: jest.fn() } }));
 jest.mock('react-native', () => ({ Share: { share: jest.fn(), dismissedAction: 'dismissedAction' } }));
 
+import { formatHourMinute, shiftClockMinutes } from '../src/constants/limits';
 import { getThemeById, THEME_LIST } from '../src/constants/themes';
 import { createMorningSnapshot } from '../src/engine/candleStateMachine';
 import {
@@ -24,6 +25,7 @@ import {
   KEY_SNAPSHOT,
   KEY_WAX_LAYERS,
   LocalStorageService,
+  SECURE_FIRST_INSTALL_AT,
   WIDGET_RELOAD_DEBOUNCE_MS,
 } from '../src/services/storageService';
 
@@ -60,10 +62,13 @@ describe('themes, storage, motion, audio, export & CloudKit regression tests', (
     expect(THEME_LIST).toHaveLength(6);
     expect(getThemeById('obsidian_night').isPro).toBe(false);
     expect(getThemeById('plum_dusk').ambientGlow).toBe('#FF9E64');
+    expect(shiftClockMinutes(0, 0, -15)).toEqual({ hour: 23, minute: 45 });
+    expect(shiftClockMinutes(23, 50, 15)).toEqual({ hour: 0, minute: 5 });
+    expect(formatHourMinute(7, 5)).toBe('07:05');
   });
 
   it('handles storage defaults, corrupt JSON recovery, widget debouncing & Keychain persistence', async () => {
-    const { kvMap, getReloads, service } = createMemoryStorage();
+    const { kvMap, secureMap, getReloads, service } = createMemoryStorage();
     expect(service.loadSettings()).toEqual(DEFAULT_SETTINGS);
     expect(service.loadSnapshot()).toBeNull();
     expect(service.loadWaxLayers()).toEqual([]);
@@ -116,6 +121,22 @@ describe('themes, storage, motion, audio, export & CloudKit regression tests', (
     const t2 = await service.ensureFirstInstallRecorded(9999);
     expect(t1).toBe(5000);
     expect(t2).toBe(5000);
+    await service.setFirstInstallAt(Number.NaN);
+    await service.setFirstInstallAt(0);
+    await service.setFirstInstallAt(4242);
+    expect(secureMap.get(SECURE_FIRST_INSTALL_AT)).toBe('4242');
+    const throwingSecure = new LocalStorageService(
+      { getString: () => undefined, set: () => undefined },
+      {
+        getItemAsync: async () => null,
+        setItemAsync: async () => {
+          throw new Error('keychain down');
+        },
+      },
+      { writeAppGroupSnapshot: () => undefined, reloadAllTimelines: () => undefined }
+    );
+    await expect(throwingSecure.setFirstInstallAt(10)).resolves.toBeUndefined();
+    expect(await throwingSecure.ensureFirstInstallRecorded(10)).toBeNull();
     expect(await service.isStarterDomeClaimed()).toBe(false);
     await service.markStarterDomeClaimed();
     expect(await service.isStarterDomeClaimed()).toBe(true);
@@ -126,13 +147,13 @@ describe('themes, storage, motion, audio, export & CloudKit regression tests', (
     expect(sec2).toBe('sec-abc');
 
     // Keychain weekly video export quota persistence (survives reinstall)
-    const { secureMap } = createMemoryStorage();
+    const { secureMap: freshSecureMap } = createMemoryStorage();
     expect(await service.loadVideoExportQuota('2026-W47')).toEqual({ weekKey: '2026-W47', count: 0 });
     await service.saveVideoExportQuota('2026-W47', 1);
     expect(await service.loadVideoExportQuota('2026-W47')).toEqual({ weekKey: '2026-W47', count: 1 });
     // New week resets quota
     expect(await service.loadVideoExportQuota('2026-W48')).toEqual({ weekKey: '2026-W48', count: 0 });
-    expect(secureMap.size).toBe(0);
+    expect(freshSecureMap.size).toBe(0);
   });
 
   it('recovers from corrupt Keychain video quota JSON', async () => {
@@ -375,6 +396,20 @@ describe('themes, storage, motion, audio, export & CloudKit regression tests', (
       flameIntensity: 1,
       streakDays: 5,
     })).toBe('https://icloud.com/share/wick-1');
+    const emptyShare = new CloudKitCircleService({
+      isICloudSignedIn: async () => true,
+      upsertOwnCandleRecord: async () => undefined,
+      createFriendShareUrl: async () => '',
+      fetchSharedFriendCandles: async () => [],
+    });
+    expect(
+      await emptyShare.inviteFriendToLockScreen({
+        displayName: 'Alex',
+        state: 'BLAZING',
+        flameIntensity: 1,
+        streakDays: 5,
+      })
+    ).toBeNull();
     expect(await ck.refreshFriendCandles()).toHaveLength(1);
   });
 

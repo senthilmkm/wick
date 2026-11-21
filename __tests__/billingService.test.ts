@@ -102,6 +102,8 @@ describe('billingService', () => {
     expect(await restoreProPurchases(undefined)).toBe(false);
     mockRestorePurchases.mockResolvedValueOnce({ entitlements: { active: { pro: {} } } });
     expect(await restoreProPurchases('key')).toBe(true);
+    mockRestorePurchases.mockResolvedValueOnce({ entitlements: { active: {} } });
+    expect(await restoreProPurchases('key')).toBe(false);
     mockRestorePurchases.mockRejectedValueOnce(new Error('err'));
     expect(await restoreProPurchases('key')).toBe(false);
   });
@@ -115,6 +117,8 @@ describe('billingService', () => {
     });
     expect(await fetchProPriceLabel('key')).toBe('$14.99');
     mockGetOfferings.mockResolvedValueOnce({ current: { availablePackages: [] } });
+    expect(await fetchProPriceLabel('key')).toBeNull();
+    mockGetOfferings.mockResolvedValueOnce({ current: null });
     expect(await fetchProPriceLabel('key')).toBeNull();
     mockGetOfferings.mockRejectedValueOnce(new Error('offline'));
     expect(await fetchProPriceLabel('key')).toBeNull();

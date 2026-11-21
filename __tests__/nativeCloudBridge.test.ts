@@ -17,6 +17,10 @@ import {
   fetchNativeSharedPendingSparks,
   reloadNativeWidgets,
   sendNativeNudge,
+  fetchNativeSleepFocus,
+  fetchNativeTrialAnchor,
+  markNativeTrialAnchorExpired,
+  peekNativeShareUrlKind,
   publishNativeVisitorCandle,
   writeNativeFriendWidgetSnapshot,
   writeNativeWidgetSnapshot,
@@ -70,6 +74,13 @@ describe('nativeCloudBridge', () => {
     expect(await fetchNativeSharedPendingSparks()).toEqual([]);
     expect(await deleteNativeNudges([])).toBe(false);
     expect(await deleteNativeNudges(['n1'])).toBe(false);
+    expect(await peekNativeShareUrlKind('https://www.icloud.com/share/x')).toEqual({
+      accepted: false,
+      kind: 'unknown',
+    });
+    expect(await fetchNativeTrialAnchor()).toBeNull();
+    await markNativeTrialAnchorExpired();
+    expect(await fetchNativeSleepFocus()).toBe(false);
     expect(
       await publishNativeVisitorCandle({
         visitorId: 'maya',
@@ -255,6 +266,8 @@ describe('nativeCloudBridge', () => {
       { nudgeId: 'n1', fromName: 'Maya', message: 'Walk', createdAt: 5 },
     ]);
     expect(await fetchNativeNudges()).toEqual([]);
+    nudgeMod.fetchNudges.mockResolvedValueOnce({ nudgeId: 'not-a-list' });
+    expect(await fetchNativeNudges()).toEqual([]);
     writeNativeFriendWidgetSnapshot('{"displayName":"Maya"}');
     expect(nudgeMod.writeFriendWidgetSnapshot).toHaveBeenCalledWith('{"displayName":"Maya"}');
     expect(await fetchNativeSharedPendingSparks()).toEqual([
@@ -285,5 +298,49 @@ describe('nativeCloudBridge', () => {
         updatedAt: 20,
       })
     ).toBe(false);
+  });
+
+  it('reads the trial anchor, share kind, and Sleep Focus, and ignores native failures', async () => {
+    const mod = {
+      peekShareUrlKind: jest
+        .fn()
+        .mockResolvedValueOnce({ accepted: true, kind: 'friend' })
+        .mockRejectedValueOnce(new Error('peek')),
+      fetchOrCreateTrialAnchor: jest
+        .fn()
+        .mockResolvedValueOnce({ createdAtMs: 50, serverNowMs: 80, expired: false })
+        .mockResolvedValueOnce({ createdAtMs: 50, serverNowMs: 0, expired: 1 })
+        .mockResolvedValueOnce({ createdAtMs: 0, serverNowMs: 80 })
+        .mockRejectedValueOnce(new Error('anchor')),
+      markTrialAnchorExpired: jest.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('mark')),
+      isSleepFocusActive: jest.fn().mockResolvedValueOnce(1).mockRejectedValueOnce(new Error('focus')),
+    };
+    mockRequireOptionalNativeModule.mockReturnValue(mod);
+
+    expect(await peekNativeShareUrlKind('https://www.icloud.com/share/friend')).toEqual({
+      accepted: true,
+      kind: 'friend',
+    });
+    expect(await peekNativeShareUrlKind('https://www.icloud.com/share/friend')).toEqual({
+      accepted: false,
+      kind: 'unknown',
+    });
+    expect(await fetchNativeTrialAnchor()).toEqual({
+      createdAtMs: 50,
+      serverNowMs: 80,
+      expired: false,
+    });
+    expect(await fetchNativeTrialAnchor()).toEqual({
+      createdAtMs: 50,
+      serverNowMs: 50,
+      expired: true,
+    });
+    expect(await fetchNativeTrialAnchor()).toBeNull();
+    expect(await fetchNativeTrialAnchor()).toBeNull();
+    await markNativeTrialAnchorExpired();
+    await markNativeTrialAnchorExpired();
+    expect(mod.markTrialAnchorExpired).toHaveBeenCalledTimes(2);
+    expect(await fetchNativeSleepFocus()).toBe(true);
+    expect(await fetchNativeSleepFocus()).toBe(false);
   });
 });

@@ -20,7 +20,6 @@ interface InfoModalProps {
 interface FlameFlavor {
   id: string;
   label: string;
-  pace: string;
   color: string;
   glow: string;
   intensity: number;
@@ -33,89 +32,71 @@ const FLAME_FLAVORS: FlameFlavor[] = [
   {
     id: 'blazing',
     label: 'Blazing',
-    pace: '100%+ pace',
     color: '#FFF6D6',
     glow: '#FF9E2C',
     intensity: 1,
-    desc: 'Tall white-gold flame with wide warm room light when you are on or ahead of pace.',
+    desc: 'On pace, or ahead.',
   },
   {
     id: 'steady',
     label: 'Steady',
-    pace: '80% – 99%',
     color: '#FF9E2C',
     glow: '#FF8C24',
     intensity: 0.7,
-    desc: 'Calm, cozy amber-orange flame burning smoothly.',
+    desc: 'Close to pace.',
   },
   {
     id: 'flickering',
     label: 'Flickering',
-    pace: '50% – 79%',
     color: '#E85D04',
     glow: '#E85D04',
     intensity: 0.45,
-    desc: 'Smaller, swaying orange flame signaling it is time for a short walk.',
+    desc: 'Behind pace.',
   },
   {
     id: 'ember',
-    label: 'Dying Ember',
-    pace: '25% – 49%',
+    label: 'Dying ember',
     color: '#9D0208',
     glow: '#9D0208',
     intensity: 0.22,
-    desc: 'Tiny crimson ember with dim light—walk a few minutes to brighten back up.',
+    desc: 'Far behind.',
   },
   {
     id: 'smoking',
-    label: 'Smoking Grace',
-    pace: '< 25% pace',
+    label: 'Out',
     color: '#52525B',
     glow: '#DC2626',
     intensity: 0,
     isSmoking: true,
-    desc: 'Flame is out with a glowing red wick and smoke. Walk 350 steps before midnight to rekindle.',
+    desc: 'The flame is out.',
   },
   {
     id: 'night',
-    label: 'Night Mode',
-    pace: 'Bedtime',
+    label: 'Night',
     color: '#7CC6FE',
     glow: '#7CC6FE',
     intensity: 0.35,
     isNight: true,
-    desc: 'Lunar-blue nightlight that freezes decay while you sleep and hardens your wax streak.',
+    desc: 'Asleep until morning.',
   },
 ];
 
 const GUIDE_ITEMS = [
   {
-    title: 'Light it',
-    body: 'Tap the lighter, or take 5 steps.',
-  },
-  {
-    title: 'Keep it bright',
-    body: 'Walk. Sit too long and the flame fades.',
-  },
-  {
-    title: 'Your pace',
-    body: 'Tap the candle to see your steps. Hold it for night or a rest day.',
-  },
-  {
     title: 'A missed day',
-    body: 'Walk 350 steps before midnight, or ask a friend for a Spark.',
+    body: 'Walk 350 steps before midnight, or ask for a Spark.',
   },
   {
     title: 'Night',
-    body: 'Blow it out at bedtime. The day cools into wax.',
+    body: 'Hold the candle, then blow it out. The day becomes wax.',
   },
   {
     title: 'Rest day',
-    body: 'The first Glass Dome is free. It pauses the candle for a day.',
+    body: 'The first rest day is free. It pauses the candle for a day.',
   },
   {
     title: 'A friend',
-    body: 'Nudge sends a text. Ask for Spark is a 500-step rescue when a friend is paired. With nobody paired, it sends a text.',
+    body: 'One iCloud invite. Nudge is a text. Ask for Spark is 500 steps once someone is paired.',
   },
   {
     title: 'Private',
@@ -157,8 +138,7 @@ export const InfoModal: React.FC<InfoModalProps> = ({ visible, onClose }) => {
           <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
             {/* Interactive Candle Flame Flavors Preview */}
             <View style={styles.flavorCard}>
-              <Text style={styles.flavorHeader}>Tap a flame to see your pace.</Text>
-              <Text style={styles.paceExplainer}>Pace is how your steps compare with the day so far.</Text>
+              <Text style={styles.flavorHeader}>The flame follows your pace.</Text>
               <View style={styles.previewRow}>
                 <Canvas style={styles.miniCanvas}>
                   {flavor.intensity > 0 ? (
@@ -201,9 +181,8 @@ export const InfoModal: React.FC<InfoModalProps> = ({ visible, onClose }) => {
                 </Canvas>
                 <View style={styles.flavorInfo}>
                   <Text style={styles.flavorTitle}>
-                    {flavor.label} • {flavor.pace}
+                    {flavor.label} • {flavor.desc}
                   </Text>
-                  <Text style={styles.itemBody}>{flavor.desc}</Text>
                 </View>
               </View>
               <View style={styles.chipRow}>

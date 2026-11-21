@@ -1,12 +1,12 @@
 import { Canvas, LinearGradient, RoundedRect, Circle, vec } from '@shopify/react-native-skia';
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Candle3DCanvas } from '../components/Candle3DCanvas';
 import { InfoModal } from '../components/InfoModal';
 import { formatTimeLeftLabel } from '../engine/candleMath';
 import { DAILY_SHARE_BUTTON_TITLE } from '../services/shareCardService';
-import { CandleSnapshot, UserSettings, WaxLayer, WickTheme } from '../types/wick';
+import { CandleSnapshot, ThemeId, UserSettings, WaxLayer, WickTheme } from '../types/wick';
 
 interface FlameScreenProps {
   snapshot: CandleSnapshot;
@@ -28,6 +28,9 @@ interface FlameScreenProps {
   onToggleControlsVisibility: () => void;
   coachLine?: string | null;
   onDismissCoach?: () => void;
+  showLighter?: boolean;
+  trialLooks?: WickTheme[] | null;
+  onSelectLook?: (themeId: ThemeId) => void;
 }
 
 export const FlameScreen: React.FC<FlameScreenProps> = ({
@@ -50,9 +53,11 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
   onToggleControlsVisibility,
   coachLine = null,
   onDismissCoach,
+  showLighter = false,
+  trialLooks = null,
+  onSelectLook,
 }) => {
   const insets = useSafeAreaInsets();
-  const [showPacePill, setShowPacePill] = useState(false);
   const [showActionsSheet, setShowActionsSheet] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [, setMinuteTick] = useState(0);
@@ -98,7 +103,6 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
 
   const handleTapCandle = () => {
     onDismissCoach?.();
-    setShowPacePill((prev) => !prev);
     onToggleControlsVisibility();
   };
 
@@ -147,19 +151,9 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
         <View style={styles.topRightActions}>
           {needsSpark && (
             <Pressable style={styles.sparkBtn} onPress={onSendSpark}>
-              <Text style={styles.sparkBtnText}>Ask Spark</Text>
+              <Text style={styles.sparkBtnText}>Ask for Spark</Text>
             </Pressable>
           )}
-          <Pressable
-            style={styles.iconBtn}
-            onPress={onShareVideo}
-            accessible
-            accessibilityRole="button"
-            accessibilityLabel={`${DAILY_SHARE_BUTTON_TITLE}. ${shareCardsLabel}`}
-          >
-            <Text style={[styles.iconBtnText, { color: theme.primaryText }]}>{DAILY_SHARE_BUTTON_TITLE}</Text>
-            <Text style={styles.shareQuotaText}>{shareCardsLabel}</Text>
-          </Pressable>
           <Pressable
             style={styles.infoCircleBtn}
             onPress={() => setShowInfoModal(true)}
@@ -176,6 +170,29 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
         <Pressable onPress={onDismissCoach} accessibilityRole="button" accessibilityLabel={coachLine}>
           <Text style={styles.coachLine}>{coachLine}</Text>
         </Pressable>
+      ) : null}
+
+      {trialLooks && trialLooks.length > 0 ? (
+        <View style={styles.lookBlock}>
+          <Text style={styles.lookCaption}>Yours for 3 days</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.lookRow}>
+            {trialLooks.map((look) => {
+              const selected = settings.themeId === look.id;
+              return (
+                <Pressable
+                  key={look.id}
+                  style={[styles.lookChip, selected && { borderColor: look.accent }]}
+                  onPress={() => onSelectLook?.(look.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={look.name}
+                >
+                  <View style={[styles.lookDot, { backgroundColor: look.accent }]} />
+                  <Text style={[styles.lookName, { color: theme.primaryText }]}>{look.name}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
       ) : null}
 
       {/* Single-Page Hero: 90% Interactive 3D Candle */}
@@ -200,7 +217,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
       </Pressable>
 
       {/* Realistic Metallic Pocket Lighter Button (shown when unlit or sleeping) */}
-      {(snapshot.state === 'UNLIT_MORNING' || snapshot.state === 'NIGHT_SLEEP') && (
+      {showLighter && (snapshot.state === 'UNLIT_MORNING' || snapshot.state === 'NIGHT_SLEEP') && (
         <View style={[styles.lighterContainer, { marginBottom: Math.max(88, insets.bottom + 76) }]}>
           <Pressable
             style={({ pressed }) => [
@@ -247,13 +264,11 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
             </Canvas>
             <Text style={styles.lighterSparkText}>Strike Lighter</Text>
           </Pressable>
-          <Pressable onPress={onStrikeLighter}>
-            <Text style={styles.lighterHint}>
-              {snapshot.state === 'NIGHT_SLEEP'
-                ? 'Tap lighter to relight'
-                : 'Tap lighter or walk 5 steps to ignite'}
-            </Text>
-          </Pressable>
+          {!coachLine ? (
+            <Pressable onPress={onStrikeLighter}>
+              <Text style={styles.lighterHint}>Tap the lighter, or take 5 steps.</Text>
+            </Pressable>
+          ) : null}
         </View>
       )}
 
@@ -261,7 +276,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
       {snapshot.state === 'SMOKING_GRACE' && (
         <View style={styles.pacePill}>
           <Text style={[styles.paceText, { color: '#FF9F43' }]}>
-            Smoking • walk 350 steps or Ask Spark to rekindle
+            Walk 350 steps before midnight, or ask for a Spark.
           </Text>
         </View>
       )}
@@ -274,22 +289,10 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
       )}
 
       {/* 1-Hour Sedentary Draft Nudge */}
-      {isSedentaryDraft && !statusMessage && !showPacePill && (
+      {isSedentaryDraft && !statusMessage && (
         <View style={styles.pacePill}>
           <Text style={[styles.paceText, { color: '#FF9F43' }]}>
             Still for 1h — walk 100 steps to steady the flame
-          </Text>
-        </View>
-      )}
-
-      {/* Subtle Tap-to-Peek Pace Pill (Zero Clutter) */}
-      {showPacePill && (
-        <View style={styles.pacePill}>
-          <Text style={[styles.paceText, { color: theme.primaryText }]}>
-            {snapshot.stepsToday.toLocaleString('en-US')} steps •{' '}
-            {goalMet
-              ? 'Goal reached!'
-              : `${stepsRemaining.toLocaleString('en-US')} left (~${walkMins}m walk)`}
           </Text>
         </View>
       )}
@@ -319,7 +322,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
                 onRemoveGlassDome();
               }}
             >
-              <Text style={styles.sheetBtnText}>Lift Glass Dome</Text>
+              <Text style={styles.sheetBtnText}>End rest day</Text>
             </Pressable>
           ) : (
             <Pressable
@@ -329,9 +332,22 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
                 onActivateGlassDome();
               }}
             >
-              <Text style={styles.sheetBtnText}>Drop Glass Dome (24h Pause)</Text>
+              <Text style={styles.sheetBtnText}>Start a rest day</Text>
             </Pressable>
           )}
+          <Pressable
+            style={styles.sheetBtn}
+            onPress={() => {
+              setShowActionsSheet(false);
+              onShareVideo();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`${DAILY_SHARE_BUTTON_TITLE}. ${shareCardsLabel}`}
+          >
+            <Text style={styles.sheetBtnText}>
+              {DAILY_SHARE_BUTTON_TITLE} · {shareCardsLabel}
+            </Text>
+          </Pressable>
           <Pressable
             style={[styles.sheetBtn, styles.sheetCancel]}
             onPress={() => setShowActionsSheet(false)}
@@ -391,6 +407,21 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginRight: 8,
   },
+  lookBlock: { marginTop: 10, gap: 6 },
+  lookCaption: { color: '#A1A1AA', fontSize: 12, fontWeight: '600' },
+  lookRow: { gap: 8, paddingRight: 8 },
+  lookChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  lookDot: { width: 8, height: 8, borderRadius: 4 },
+  lookName: { fontSize: 12, fontWeight: '600' },
   howItWorks: {
     fontSize: 13,
     fontWeight: '600',

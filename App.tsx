@@ -23,7 +23,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { MMKV } from 'react-native-mmkv';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PaywallModal, PaywallReason } from './src/components/PaywallModal';
-import { getThemeById } from './src/constants/themes';
+import { getThemeById, THEME_LIST } from './src/constants/themes';
 import {
   CANDLE_MOOD_COLORS,
   getLocalDateKey,
@@ -35,8 +35,10 @@ import { reigniteFromSpark, activateGlassDome, createMorningSnapshot, evaluateCa
 import {
   canAskForSpark,
   classifySparkRescue,
+  friendArrivalLine,
   friendListChanged,
   isForgeablePairLink,
+  nextFriendArrival,
   nudgeShareMessage,
   pickIncomingSpark,
   readIdList,
@@ -64,7 +66,15 @@ import {
   latchTrialExpiry,
   recordVideoExport,
 } from './src/engine/trialGuard';
-import { flameCoachLine, TAB_HINTS } from './src/engine/firstRunCopy';
+import {
+  flameCoachLine,
+  FREE_STAYS,
+  PRO_ADDS,
+  shouldShowLighter,
+  TAB_HINTS,
+  tabsShouldHide,
+  walkLitTheCandle,
+} from './src/engine/firstRunCopy';
 import { buildOnboardingSettings, finishOnboardingSnapshot } from './src/engine/onboardingFlow';
 import { earlierInstallStamp, proFromStoreStatus, resolveAuthoritativeNow } from './src/engine/trustedClock';
 import { CircleScreen } from './src/screens/CircleScreen';
@@ -188,6 +198,9 @@ const KEY_FRIENDS = 'wick.friends.v1';
 const KEY_REMOVED_FRIENDS = 'wick.removed_friends.v1';
 const KEY_VISITOR_ID = 'wick.visitor.candle.id';
 const KEY_FLAME_COACH = 'wick.coach.flame.v1';
+const KEY_TABS_MAY_HIDE = 'wick.tabs.may_hide.v1';
+const KEY_LIT_BY_WALK = 'wick.lit.by.walk.v1';
+const KEY_SEEN_FRIEND_ARRIVALS = 'wick.friends.arrived.v1';
 const KEY_SEEN_TABS = 'wick.hint.tabs.v1';
 const KEY_SEEN_NUDGES = 'wick.nudge.seen.v1';
 const KEY_HANDLED_SPARKS = 'wick.spark.handled.v1';
@@ -275,6 +288,8 @@ function WickRoot() {
   const [onboarded, setOnboarded] = useState<boolean>(() => kvGet(KEY_ONBOARDED) === '1');
   const [activeTab, setActiveTab] = useState<TabKey>('flame');
   const [flameCoachOn, setFlameCoachOn] = useState(() => kvGet(KEY_FLAME_COACH) !== '1');
+  const [tabsMayHide, setTabsMayHide] = useState(() => kvGet(KEY_TABS_MAY_HIDE) === '1');
+  const [litByWalk, setLitByWalk] = useState(() => kvGet(KEY_LIT_BY_WALK) === '1');
   const [seenTabs, setSeenTabs] = useState<string[]>(() => readIdList(kvGet(KEY_SEEN_TABS)));
   const [tabsVisible, setTabsVisible] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -483,6 +498,10 @@ function WickRoot() {
           showToast('Daily goal reached! Your wick is blazing.');
         }
         void notifySmokingGraceIfNeeded(prev.state, res.snapshot.state);
+        if (walkLitTheCandle(prev, res.snapshot)) {
+          kvSet(KEY_LIT_BY_WALK, '1');
+          setLitByWalk(true);
+        }
         if (res.completedDayLayer) {
           const nextLayers = storageService.appendWaxLayer(res.completedDayLayer);
           setWaxLayers(nextLayers);
@@ -562,7 +581,7 @@ function WickRoot() {
         for (const id of waitIds) {
           announcedSparkWaitRef.current.add(id);
         }
-        showToast('Your friend walked 500 steps. The candle reignites when night mode or the Glass Dome ends.');
+        showToast('Your friend walked 500 steps. The candle reignites when night or the rest day ends.');
       }
       if (applyIds.length === 0) {
         return;
@@ -1365,12 +1384,53 @@ function WickRoot() {
       clearTimeout(hideTimerRef.current);
     }
     setTabsVisible(true);
-    if (activeTab === 'flame') {
+    if (tabsShouldHide(activeTab, tabsMayHide)) {
       hideTimerRef.current = setTimeout(() => {
         setTabsVisible(false);
       }, 4000);
     }
-  }, [activeTab]);
+  }, [activeTab, tabsMayHide]);
+
+  useEffect(() => {
+    if (activeTab !== 'flame' && !tabsMayHide) {
+      setTabsMayHide(true);
+      kvSet(KEY_TABS_MAY_HIDE, '1');
+    }
+  }, [activeTab, tabsMayHide]);
+
+  useEffect(() => {
+    if (litByWalk || (snapshot.streakDays <= 0 && waxLayers.length === 0)) {
+      return;
+    }
+    kvSet(KEY_LIT_BY_WALK, '1');
+    setLitByWalk(true);
+  }, [litByWalk, snapshot.streakDays, waxLayers.length]);
+
+  const friendArrivalReady = useRef(false);
+  useEffect(() => {
+    const seen = readIdList(kvGet(KEY_SEEN_FRIEND_ARRIVALS));
+    if (!friendArrivalReady.current) {
+      friendArrivalReady.current = true;
+      let stored = seen;
+      for (const friend of friends) {
+        stored = rememberId(stored, friend.id);
+      }
+      if (stored.length !== seen.length) {
+        kvSet(KEY_SEEN_FRIEND_ARRIVALS, JSON.stringify(stored));
+      }
+      return;
+    }
+    const arrival = nextFriendArrival(seen, friends);
+    if (!arrival) {
+      return;
+    }
+    let stored = seen;
+    for (const friend of friends) {
+      stored = rememberId(stored, friend.id);
+    }
+    kvSet(KEY_SEEN_FRIEND_ARRIVALS, JSON.stringify(stored));
+    showToast(friendArrivalLine(arrival.name));
+  }, [friends, showToast]);
 
   useEffect(() => {
     scheduleAutoHide();
@@ -1458,7 +1518,7 @@ function WickRoot() {
 
   const handleBlowOutWithMic = async () => {
     if (snapshot.state === 'GLASS_DOME') {
-      showToast('Glass Dome protects the flame. Lift it first to blow out.');
+      showToast('A rest day is on. End it before blowing the candle out.');
       return;
     }
     const completeBlowOut = () => {
@@ -1792,6 +1852,19 @@ function WickRoot() {
     }
   };
 
+  const chooseLook = (themeId: ThemeId) => {
+    if (!canUseTheme(entitlementRef.current, themeId, trustedNowRef.current)) {
+      setPaywallReason('theme');
+      return;
+    }
+    handleUpdateSettings({ themeId });
+    showToast(`${getThemeById(themeId).name} is on.`);
+  };
+  const trialLooks =
+    accessReady && isInReverseTrial(entitlement, trustedNowMs) && !entitlement.isPro
+      ? THEME_LIST.filter((look) => look.isPro)
+      : null;
+
   if (!hydrated) {
     return <View style={[styles.flex, { backgroundColor: '#0A0A0C' }]} />;
   }
@@ -1823,6 +1896,10 @@ function WickRoot() {
               );
               storageService.saveSnapshot(next, now.getTime());
               void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(next)).catch(() => {});
+              if (walkLitTheCandle(prev, next)) {
+                kvSet(KEY_LIT_BY_WALK, '1');
+                setLitByWalk(true);
+              }
               return next;
             });
             setOnboarded(true);
@@ -1865,6 +1942,9 @@ function WickRoot() {
     setActiveTab('flame');
     setShowMoodModal(false);
     setFlameCoachOn(true);
+    setLitByWalk(false);
+    setTabsMayHide(false);
+    setTabsVisible(true);
     setSeenTabs([]);
     setOnboarded(false);
     showToast('All local data reset.');
@@ -1885,6 +1965,10 @@ function WickRoot() {
       goalCelebratedDateRef.current = res.snapshot.dateKey;
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showToast('Daily goal reached! Your wick is blazing.');
+    }
+    if (walkLitTheCandle(snapshot, res.snapshot)) {
+      kvSet(KEY_LIT_BY_WALK, '1');
+      setLitByWalk(true);
     }
     setSnapshot(res.snapshot);
     storageService.saveSnapshot(res.snapshot, Date.now());
@@ -1958,7 +2042,7 @@ function WickRoot() {
                 void storageService.markStarterDomeClaimed();
                 setEntitlement((e) => ({ ...e, starterDomeClaimed: true }));
               }
-              showToast('Glass Dome active — flame protected from wind.');
+              showToast('Rest day. The flame stays still.');
             } else if (res.reason) {
               showToast(res.reason);
             }
@@ -1968,17 +2052,24 @@ function WickRoot() {
             setSnapshot(next);
             storageService.saveSnapshot(next, Date.now());
             void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(next));
-            showToast('Glass Dome lifted.');
+            showToast('Rest day ended.');
           }}
           onBlowOutNight={() => {
             void handleBlowOutWithMic();
           }}
           onToggleControlsVisibility={scheduleAutoHide}
-          coachLine={flameCoachOn ? flameCoachLine(snapshot.state) : null}
-          onDismissCoach={() => {
-            setFlameCoachOn(false);
-            kvSet(KEY_FLAME_COACH, '1');
-          }}
+          coachLine={flameCoachOn || !litByWalk ? flameCoachLine(snapshot.state, litByWalk) : null}
+          onDismissCoach={
+            litByWalk
+              ? () => {
+                  setFlameCoachOn(false);
+                  kvSet(KEY_FLAME_COACH, '1');
+                }
+              : undefined
+          }
+          showLighter={shouldShowLighter(snapshot.state, litByWalk)}
+          trialLooks={trialLooks}
+          onSelectLook={chooseLook}
         />
       )}
 
@@ -2079,14 +2170,7 @@ function WickRoot() {
           isReverseTrialActive={accessReady && isInReverseTrial(entitlement, trustedNowMs)}
           priceLabel={proPriceLabel}
           glassDomesOwned={snapshot.glassDomesOwned}
-          onSelectTheme={(themeId: ThemeId) => {
-            if (!canUseTheme(entitlementRef.current, themeId, trustedNowRef.current)) {
-              setPaywallReason('theme');
-              return;
-            }
-            handleUpdateSettings({ themeId });
-            showToast('Theme updated.');
-          }}
+          onSelectTheme={chooseLook}
           onUpdateSettings={handleUpdateSettings}
           onRestorePurchases={() => {
             void restoreProEntitlement(REVENUECAT_IOS_KEY).then((status) => {
@@ -2141,9 +2225,7 @@ function WickRoot() {
           <View style={styles.moodSheet}>
             <Text style={styles.moodTitle}>Your 3 days of full access ended</Text>
             <Text style={styles.moodSub}>
-              The solo candle stays free, with Obsidian Night, one Circle friend, seven days of
-              wax history, and your first Glass Dome. Themes, extra friends, the full ledger, PDF
-              export, and more domes are Wick Pro.
+              {PRO_ADDS} {FREE_STAYS}
             </Text>
             <Pressable
               style={styles.nameSaveBtn}
@@ -2276,18 +2358,7 @@ function WickRoot() {
           <View style={[styles.moodSheet, { maxHeight: '88%', paddingBottom: Math.max(28, insets.bottom + 16) }]}>
             <ScrollView bounces={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 12 }}>
             <Text style={styles.moodTitle}>Name Your Candle</Text>
-            <Text style={styles.moodSub}>
-              Before pairing, add your name so friends see who you are instead of &quot;Friend&quot;.
-            </Text>
-            <View style={styles.nameInfoBox}>
-              <Text style={styles.nameInfoTitle}>Where this name is shown:</Text>
-              <Text style={styles.nameInfoItem}>
-                • In your friend&apos;s Circle list and Nudge / Spark Rescue alerts
-              </Text>
-              <Text style={styles.nameInfoItem}>
-                • Engraved on your own Candle &amp; Wax Ledger header
-              </Text>
-            </View>
+            <Text style={styles.moodSub}>Friends see this name.</Text>
             <TextInput
               style={styles.nameInput}
               value={candleNameDraft}
@@ -2297,7 +2368,7 @@ function WickRoot() {
                   setCandleNameError(null);
                 }
               }}
-              placeholder="Your name (e.g. Senthil)"
+              placeholder="Your name"
               placeholderTextColor="#71717A"
               maxLength={12}
               autoFocus
@@ -2307,7 +2378,7 @@ function WickRoot() {
             {candleNameError && <Text style={styles.nameErrorText}>{candleNameError}</Text>}
             <Pressable style={styles.nameSaveBtn} onPress={handleSaveCandleNameModal}>
               <Text style={styles.nameSaveBtnText}>
-                {pendingInviteAfterNameRef.current ? 'Save & Share Pair Link' : 'Save Candle Name'}
+                {pendingInviteAfterNameRef.current ? 'Save and invite' : 'Save'}
               </Text>
             </Pressable>
             <Pressable

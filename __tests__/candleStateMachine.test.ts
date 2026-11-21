@@ -203,6 +203,47 @@ describe('candleStateMachine & regression lifecycle', () => {
     expect(zeroStepRollover.completedDayLayer).toBeNull();
     expect(zeroStepRollover.snapshot.streakDays).toBe(4);
 
+    const nightWithoutIgnition = {
+      ...createMorningSnapshot('2026-11-18', night.getTime(), 2, 10, 0),
+      state: 'NIGHT_SLEEP' as const,
+      stepsToday: 400,
+      ignitedAt: null,
+    };
+    const nightRollover = evaluateCandleState({
+      snapshot: nightWithoutIgnition,
+      stepsToday: 0,
+      settings,
+      now: nextMorning,
+    });
+    expect(nightRollover.completedDayLayer).not.toBeNull();
+    expect(nightRollover.snapshot.streakDays).toBe(3);
+
+    const domeStillUp = {
+      ...snap,
+      state: 'STEADY' as const,
+      glassDomeActiveUntil: nextMorning.getTime() + 60_000,
+    };
+    const domeRollover = evaluateCandleState({
+      snapshot: domeStillUp,
+      stepsToday: 0,
+      settings,
+      now: nextMorning,
+    });
+    expect(domeRollover.snapshot.state).toBe('GLASS_DOME');
+
+    const domeAlreadyDown = {
+      ...snap,
+      state: 'STEADY' as const,
+      glassDomeActiveUntil: night.getTime() - 1000,
+    };
+    const expiredDomeRollover = evaluateCandleState({
+      snapshot: domeAlreadyDown,
+      stepsToday: 0,
+      settings,
+      now: nextMorning,
+    });
+    expect(expiredDomeRollover.snapshot.state).not.toBe('GLASS_DOME');
+
     // SMOKING_GRACE with null smokingStartSteps fallback
     const smokingNullStart = {
       ...snap,
@@ -288,6 +329,7 @@ describe('candleStateMachine & regression lifecycle', () => {
     const broke = createMorningSnapshot('2026-11-18', now.getTime(), 0, 10, 0);
     const actFail = activateGlassDome(broke, now.getTime());
     expect(actFail.activated).toBe(false);
+    expect(actFail.reason).toBe('A rest day needs 300g of wax. The first one was free.');
 
     // Manual lift of Glass Dome (both unlit and ignited) plus no-op when not under dome
     const liftedUnlit = removeGlassDome(act1.snapshot, now.getTime() + 5000);

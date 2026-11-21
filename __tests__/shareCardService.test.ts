@@ -137,6 +137,8 @@ describe('shareCardService', () => {
       })
     ).toContain('Senthil • Nov 20, 2026 • Day 5 • My wick is smoking grace (6,400 / 8,000 steps today) • Mood: Calm');
     expect(formatCardDate('2026-11-20')).toBe('Nov 20, 2026');
+    expect(formatCardDate('not-a-date')).toBe('not-a-date');
+    expect(formatCardDate('2026-13-01')).toBe('2026-13-01');
     expect(DAILY_SHARE_BUTTON_TITLE).toBe('Share Card');
     expect(WEEK_CARD_BUTTON_TITLE).toBe('Week Card');
     expect(SHARE_WEEK_CARD_BUTTON_TITLE).toBe('Share Week Card');
@@ -191,6 +193,19 @@ describe('shareCardService', () => {
         theme,
         dateKey: '2026-11-20',
         mood: 'Grateful',
+      })
+    ).toBe('data:image/png;base64,DAILY_B64');
+    expect(
+      renderDailyCardDataUri({
+        streakDays: 2,
+        stepsToday: 1000,
+        dailyStepGoal: 8000,
+        state: 'STEADY',
+        flameIntensity: 0.7,
+        flameColorHex: '#FF9E2C',
+        waxGrams: 40,
+        theme,
+        dateKey: '2026-11-19',
       })
     ).toBe('data:image/png;base64,DAILY_B64');
     expect(drawnTexts).toEqual(

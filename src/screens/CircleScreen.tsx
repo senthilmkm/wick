@@ -1,28 +1,10 @@
-import React, { useState } from 'react';
-import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FirstHint } from '../components/FirstHint';
+import { candleStateLabel } from '../engine/firstRunCopy';
 import { ActiveSparkRescue, FriendCandle, WickTheme } from '../types/wick';
-
-const PAIR_STEPS = [
-  {
-    step: '1. Sign in to iCloud',
-    body: 'Both phones need to be signed in to iCloud in iPhone Settings.',
-  },
-  {
-    step: '2. Send one invite',
-    body: 'Tap Invite. Your friend accepts that iCloud link. You both see each other in Circle. Nobody sends a second link.',
-  },
-  {
-    step: '3. Your lock screen stays yours',
-    body: 'The Wick widget shows your candle and streak. Your friend’s candle stays here in Circle.',
-  },
-  {
-    step: '4. Nudge and Spark',
-    body: 'Nudge opens a text with their name and flame. Ask for Spark is a 500-step rescue once someone is paired. With nobody paired, it opens a text.',
-  },
-];
 
 interface CircleScreenProps {
   friends: FriendCandle[];
@@ -52,7 +34,6 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
   onDismissHint,
 }) => {
   const insets = useSafeAreaInsets();
-  const [infoVisible, setInfoVisible] = useState(false);
 
   return (
     <ScrollView
@@ -74,14 +55,6 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
           >
             <Text style={styles.inviteText}>Invite</Text>
           </Pressable>
-          <Pressable
-            style={styles.infoBtn}
-            onPress={() => setInfoVisible(true)}
-            accessibilityRole="button"
-            accessibilityLabel="How inviting a friend works"
-          >
-            <Text style={styles.infoBtnText}>Help</Text>
-          </Pressable>
         </View>
       </View>
 
@@ -90,27 +63,21 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
       {canAskSpark ? (
         <View style={styles.sparkAskCard}>
           <View style={styles.sparkAskInfo}>
-            <Text style={[styles.sparkAskTitle, { color: theme.primaryText }]}>
-              Ask a Friend for Spark
-            </Text>
+            <Text style={[styles.sparkAskTitle, { color: theme.primaryText }]}>Ask for Spark</Text>
             <Text style={styles.sparkAskBody}>
-              A paired friend walks 500 steps in Wick. With nobody paired, this opens a text.
+              {friends.length > 0 ? 'They walk 500 steps.' : 'This opens a text.'}
             </Text>
           </View>
           <Pressable
             style={styles.sparkAskBtn}
             onPress={onSendSpark}
             accessibilityRole="button"
-            accessibilityLabel="Ask for Spark 500 steps"
+            accessibilityLabel="Ask for Spark"
           >
-            <Text style={styles.sparkAskBtnText}>Ask for Spark (500 Steps)</Text>
+            <Text style={styles.sparkAskBtnText}>Ask for Spark</Text>
           </Pressable>
         </View>
-      ) : (
-        <Text style={styles.sparkWaiting}>
-          Ask for Spark appears when your flame is flickering, an ember, smoking, or out.
-        </Text>
-      )}
+      ) : null}
 
       {activeRescue && (
         <View style={styles.rescueCard}>
@@ -137,9 +104,7 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
           <Text style={[styles.emptyTitle, { color: theme.primaryText }]}>
             Walk with one friend
           </Text>
-          <Text style={styles.emptyBody}>
-            Send one iCloud invite. When they accept, you both show up here. Your lock screen keeps your own candle.
-          </Text>
+          <Text style={styles.emptyBody}>When they accept, you both show up here.</Text>
         </View>
       ) : (
         friends.map((friend) => {
@@ -164,7 +129,7 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
                   {friend.displayName}
                 </Text>
                 <Text style={styles.friendMeta}>
-                  {friend.state.toLowerCase().replace('_', ' ')} • {friend.streakDays}d streak
+                  {candleStateLabel(friend.state)} • {friend.streakDays}d streak
                 </Text>
               </View>
               <Pressable
@@ -196,34 +161,6 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
         })
       )}
 
-      <Modal
-        visible={infoVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setInfoVisible(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>How inviting works</Text>
-              <Pressable onPress={() => setInfoVisible(false)}>
-                <Text style={styles.modalClose}>Done</Text>
-              </Pressable>
-            </View>
-            <Text style={styles.modalSubtitle}>
-              One invite. Both candles show up in Circle.
-            </Text>
-            <ScrollView style={styles.stepsList} contentContainerStyle={styles.stepsContent}>
-              {PAIR_STEPS.map((item) => (
-                <View key={item.step} style={styles.stepCard}>
-                  <Text style={styles.stepTitle}>{item.step}</Text>
-                  <Text style={styles.stepBody}>{item.body}</Text>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   );
 };

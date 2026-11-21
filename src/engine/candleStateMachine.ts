@@ -259,24 +259,6 @@ export function evaluateCandleState(input: StepEvaluationInput): StepEvaluationR
     }
 
     const graceEnds = endOfLocalDayMs(now);
-    if (nowMs >= graceEnds) {
-      return {
-        completedDayLayer,
-        snapshot: {
-          ...current,
-          state: 'EXTINGUISHED',
-          stepsToday: safeSteps,
-          expectedStepsNow,
-          paceRatio,
-          flameIntensity: 0,
-          flameColorHex: getFlameColorHex('EXTINGUISHED'),
-          smokingGraceExpiresAt: null,
-          smokingStartSteps: null,
-          updatedAt: nowMs,
-        },
-      };
-    }
-
     return {
       completedDayLayer,
       snapshot: {
@@ -411,7 +393,7 @@ export function activateGlassDome(
   return {
     snapshot,
     activated: false,
-    reason: `Need ${GLASS_DOME_WAX_COST}g wax or an owned Glass Dome.`,
+    reason: 'A rest day needs 300g of wax. The first one was free.',
   };
 }
 

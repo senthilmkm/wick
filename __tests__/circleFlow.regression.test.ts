@@ -2,7 +2,9 @@ import {
   canAskForSpark,
   canSendNudge,
   classifySparkRescue,
+  friendArrivalLine,
   friendListChanged,
+  nextFriendArrival,
   friendOwnerName,
   isForgeablePairLink,
   isVisitorCandleName,
@@ -99,6 +101,17 @@ describe('circle pairing, nudge, and spark regression', () => {
     announced.add('s2');
     expect(classifySparkRescue('GLASS_DOME', 500, 's2', applied, announced)).toBe('wait-silent');
     expect(classifySparkRescue('UNLIT_MORNING', 500, 's2', applied, announced)).toBe('apply');
+  });
+
+  it('says a friend is here the first time their candle appears', () => {
+    expect(friendArrivalLine('Alex')).toBe('Alex is here.');
+    expect(friendArrivalLine('  ')).toBe('A friend is here.');
+    expect(nextFriendArrival(['a'], [{ id: 'a', displayName: 'Alex' }])).toBeNull();
+    expect(nextFriendArrival(['a'], [{ id: 'b', displayName: 'Alex' }])).toEqual({
+      id: 'b',
+      name: 'Alex',
+    });
+    expect(nextFriendArrival([], [{ id: ' ', displayName: 'Alex' }])).toBeNull();
   });
 
   it('keeps the lock screen candle still when a friend refresh has the same fields', () => {

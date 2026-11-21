@@ -18,11 +18,13 @@ import {
   createInitialEntitlement,
   FREE_MAX_LEDGER_DAYS,
   getVisibleLedgerLimit,
+  capFriendList,
   creditShareQuota,
   formatFreeShareCardsLabel,
   freeShareCardsRemaining,
   hasProAccess,
   isInReverseTrial,
+  latchTrialExpiry,
   recordVideoExport,
   REVERSE_TRIAL_MS,
   SHARE_QUOTA_WINDOW_MS,
@@ -95,6 +97,32 @@ describe('trialGuard & anti-reinstall protection', () => {
     expect(freeEnt.isEligibleForIntroTrial).toBe(true);
     // Within 3-day reverse trial: all Pro features unlocked
     expect(isInReverseTrial(freeEnt, day1.getTime() + 1000)).toBe(true);
+    expect(isInReverseTrial({ ...freeEnt, trialExpired: true }, day1.getTime() + 1000)).toBe(false);
+    expect(isInReverseTrial({ ...freeEnt, firstInstallAt: 0 }, day1.getTime() + 1000)).toBe(false);
+    expect(isInReverseTrial({ ...freeEnt, firstInstallAt: Number.NaN }, day1.getTime() + 1000)).toBe(
+      false
+    );
+    expect(latchTrialExpiry({ ...freeEnt, trialExpired: true }, day1.getTime(), false).trialExpired).toBe(
+      true
+    );
+    expect(latchTrialExpiry({ ...freeEnt, firstInstallAt: 0 }, day1.getTime(), false).trialExpired).toBe(
+      true
+    );
+    expect(latchTrialExpiry(freeEnt, day1.getTime(), true).trialExpired).toBe(true);
+    expect(latchTrialExpiry(freeEnt, day1.getTime() + 1000, false)).toBe(freeEnt);
+    const missingQuota = { ...freeEnt, quotaElapsedMs: undefined as unknown as number };
+    expect(creditShareQuota(missingQuota, 5).quotaElapsedMs).toBe(5);
+    expect(recordVideoExport(missingQuota, day1).quotaElapsedMs).toBe(0);
+    expect(creditShareQuota(freeEnt, Number.NaN)).toBe(freeEnt);
+    expect(creditShareQuota(freeEnt, 0)).toBe(freeEnt);
+    const friends = [
+      { updatedAt: 1, id: 'old' },
+      { updatedAt: 9, id: 'new' },
+    ];
+    expect(capFriendList(friends, { ...freeEnt, isPro: true }, day1.getTime())).toBe(friends);
+    expect(
+      capFriendList(friends, { ...freeEnt, trialExpired: true, firstInstallAt: 0 }, day1.getTime() + 1000)
+    ).toEqual([{ updatedAt: 9, id: 'new' }]);
     expect(hasProAccess(freeEnt, day1.getTime() + 1000)).toBe(true);
     expect(canUseTheme(freeEnt, 'midnight_hearth', day1.getTime() + 1000)).toBe(true);
     expect(canUseGlassDome(freeEnt, day1.getTime() + 1000)).toBe(true);

@@ -1,5 +1,14 @@
 import { createMorningSnapshot } from '../src/engine/candleStateMachine';
-import { flameCoachLine, TAB_HINTS, WELCOME_LINES, WELCOME_TITLE } from '../src/engine/firstRunCopy';
+import {
+  candleStateLabel,
+  flameCoachLine,
+  shouldShowLighter,
+  TAB_HINTS,
+  tabsShouldHide,
+  walkLitTheCandle,
+  WELCOME_LINES,
+  WELCOME_TITLE,
+} from '../src/engine/firstRunCopy';
 import {
   adjustDailyGoal,
   buildOnboardingSettings,
@@ -45,15 +54,45 @@ describe('onboarding flow regression', () => {
     }
     expect(moveOnboardingStep('permissions', 1)).toBe('permissions');
     expect(moveOnboardingStep('permissions', -1)).toBe('goal');
-    expect(flameCoachLine('UNLIT_MORNING')).toBe('Tap the lighter, or take 5 steps.');
-    expect(flameCoachLine('NIGHT_SLEEP')).toBe('Tap the lighter, or take 5 steps.');
+    expect(flameCoachLine('UNLIT_MORNING')).toBe('Take 5 steps.');
+    expect(flameCoachLine('NIGHT_SLEEP', true)).toBe('Tap the lighter, or take 5 steps.');
     expect(flameCoachLine('BLAZING')).toBe(
-      'Walk to keep it bright. Tap the candle for your pace. Hold it for night and rest.'
+      'Walk to keep it bright. Hold the candle for night, rest, or a share.'
     );
+    expect(tabsShouldHide('flame', false)).toBe(false);
+    expect(tabsShouldHide('flame', true)).toBe(true);
+    expect(tabsShouldHide('circle', true)).toBe(false);
+    expect(candleStateLabel('BLAZING')).toBe('Blazing');
+    expect(candleStateLabel('STEADY')).toBe('Steady');
+    expect(candleStateLabel('FLICKERING')).toBe('Flickering');
+    expect(candleStateLabel('DYING_EMBER')).toBe('Dying ember');
+    expect(candleStateLabel('GLASS_DOME')).toBe('Rest day');
+    expect(candleStateLabel('SMOKING_GRACE')).toBe('Out');
+    expect(candleStateLabel('EXTINGUISHED')).toBe('Out');
+    expect(candleStateLabel('NIGHT_SLEEP')).toBe('Night');
+    expect(candleStateLabel('UNLIT_MORNING')).toBe('Unlit');
+    expect(candleStateLabel('IGNITING')).toBe('Lighting');
+    expect(candleStateLabel('OTHER')).toBe('Candle');
+    expect(shouldShowLighter('UNLIT_MORNING', false)).toBe(false);
+    expect(shouldShowLighter('UNLIT_MORNING', true)).toBe(true);
+    expect(shouldShowLighter('NIGHT_SLEEP', true)).toBe(true);
+    expect(shouldShowLighter('BLAZING', true)).toBe(false);
+    expect(
+      walkLitTheCandle(
+        { state: 'UNLIT_MORNING', ignitedAt: null },
+        { ignitedAt: 10, stepsToday: 5 }
+      )
+    ).toBe(true);
+    expect(
+      walkLitTheCandle(
+        { state: 'UNLIT_MORNING', ignitedAt: null },
+        { ignitedAt: 10, stepsToday: 4 }
+      )
+    ).toBe(false);
     expect(TAB_HINTS).toEqual({
       ledger: 'Past days, saved as wax.',
       circle: 'One friend. Send one invite.',
-      sanctuary: 'Look, reminders, and sleep live here.',
+      sanctuary: 'Look, name, goal, and sleep.',
     });
   });
 
@@ -120,25 +159,26 @@ describe('onboarding flow regression', () => {
     });
   });
 
-  it('lights the candle on finish and keeps Health steps when they are enough to ignite', () => {
+  it('leaves the first candle unlit until 5 steps, then keeps Health steps', () => {
     const unlit = morning();
     const manual = finishOnboardingSnapshot(unlit, DEFAULT_SETTINGS, now, null);
-    expect(manual.state).toBe('IGNITING');
-    expect(manual.ignitedAt).toBe(now.getTime());
-    expect(manual.stepsToday).toBe(0);
+    expect(manual.state).toBe('UNLIT_MORNING');
+    expect(manual.ignitedAt).toBeNull();
 
     const few = finishOnboardingSnapshot(unlit, DEFAULT_SETTINGS, now, 3.2);
-    expect(few.state).toBe('IGNITING');
+    expect(few.state).toBe('UNLIT_MORNING');
     expect(few.stepsToday).toBe(3);
+    expect(few.ignitedAt).toBeNull();
 
     const zero = finishOnboardingSnapshot(unlit, DEFAULT_SETTINGS, now, 0);
-    expect(zero.state).toBe('IGNITING');
+    expect(zero.state).toBe('UNLIT_MORNING');
     expect(zero.stepsToday).toBe(0);
 
     const none = finishOnboardingSnapshot(unlit, DEFAULT_SETTINGS, now, Number.NaN);
-    expect(none.state).toBe('IGNITING');
+    expect(none.state).toBe('UNLIT_MORNING');
 
     const negative = finishOnboardingSnapshot(unlit, DEFAULT_SETTINGS, now, -2);
+    expect(negative.state).toBe('UNLIT_MORNING');
     expect(negative.stepsToday).toBe(0);
 
     const walked = finishOnboardingSnapshot(unlit, DEFAULT_SETTINGS, now, 5);

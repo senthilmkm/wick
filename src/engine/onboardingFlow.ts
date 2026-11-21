@@ -175,6 +175,12 @@ export function finishOnboardingSnapshot(
       now,
     }).snapshot;
   }
+  if (snapshot.state === 'UNLIT_MORNING') {
+    if (steps != null && steps > 0) {
+      return { ...snapshot, stepsToday: steps, updatedAt: now.getTime() };
+    }
+    return snapshot;
+  }
   const lit = igniteWithLighter(snapshot, now.getTime());
   if (steps != null && steps > 0) {
     return { ...lit, stepsToday: steps };

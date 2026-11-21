@@ -16,6 +16,13 @@ describe('trusted clock and store entitlement', () => {
     expect(rolled.trustedNowMs).toBe(install + 10 * 24 * 60 * 60 * 1000);
     expect(rolled.forwardCreditMs).toBe(0);
 
+    expect(resolveTrustedNow(install, null).trustedNowMs).toBe(install);
+    expect(resolveTrustedNow(install, Number.NaN).clockRolledBack).toBe(false);
+    expect(resolveTrustedNow(install, 0).forwardCreditMs).toBe(0);
+    const withinTolerance = resolveTrustedNow(install, install + 60 * 1000);
+    expect(withinTolerance.clockRolledBack).toBe(false);
+    expect(withinTolerance.trustedNowMs).toBe(install + 60 * 1000);
+
     const jumped = resolveTrustedNow(install + 8 * 24 * 60 * 60 * 1000, install);
     expect(jumped.clockRolledBack).toBe(false);
     expect(jumped.forwardCreditMs).toBe(TRUSTED_FORWARD_CAP_MS);
@@ -29,6 +36,9 @@ describe('trusted clock and store entitlement', () => {
     expect(clock.clockRolledBack).toBe(false);
     expect(earlierInstallStamp(install + 999999, install)).toBe(install);
     expect(earlierInstallStamp(null, null)).toBeNull();
+    expect(resolveAuthoritativeNow(install, install, null).trustedNowMs).toBe(install);
+    expect(resolveAuthoritativeNow(install, install, Number.NaN).trustedNowMs).toBe(install);
+    expect(resolveAuthoritativeNow(install, null, serverNow).forwardCreditMs).toBe(0);
   });
 
   it('keeps Pro only for an active StoreKit grant or a recent confirmed cache', () => {

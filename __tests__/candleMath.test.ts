@@ -98,7 +98,7 @@ describe('candleMath', () => {
       'Resting until morning'
     );
     expect(formatTimeLeftLabel(new Date(2026, 10, 19, 14, 0), 23, 0, 200, 3000, 'GLASS_DOME')).toBe(
-      'Paused (Glass Dome)'
+      'Rest day'
     );
     expect(formatTimeLeftLabel(new Date(2026, 10, 19, 14, 0), 23, 0, 3200, 3000, 'BLAZING')).toBe(
       'Goal reached'

@@ -98,7 +98,6 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
             accessibilityLabel={`${WEEK_CARD_BUTTON_TITLE}. ${shareCardsLabel}`}
           >
             <Text style={styles.weekBtnText}>{WEEK_CARD_BUTTON_TITLE}</Text>
-            <Text style={styles.weekQuotaText}>{shareCardsLabel}</Text>
           </Pressable>
           <Pressable
             style={[styles.pdfBtn, { backgroundColor: theme.accent }]}
@@ -174,7 +173,7 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
       {visibleLayers.length === 0 ? (
         <View style={styles.emptyCard}>
           <Text style={[styles.emptyText, { color: theme.primaryText }]}>
-            Complete your first day to harden your first wax band.
+            A finished day becomes wax.
           </Text>
         </View>
       ) : (
@@ -198,7 +197,7 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
       {!entitlement.isPro && layers.length > limit && (
         <Pressable style={styles.upgradeBanner} onPress={onUpgradePro}>
           <Text style={styles.upgradeText}>
-            Unlock full Day 100+ Wax Ledger with Wick Pro
+            Full wax history is in Wick Pro
           </Text>
         </Pressable>
       )}

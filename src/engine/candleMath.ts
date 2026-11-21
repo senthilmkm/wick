@@ -217,7 +217,7 @@ export function formatTimeLeftLabel(
     return 'Resting until morning';
   }
   if (state === 'GLASS_DOME') {
-    return 'Paused (Glass Dome)';
+    return 'Rest day';
   }
   if (stepsToday >= dailyStepGoal) {
     return 'Goal reached';

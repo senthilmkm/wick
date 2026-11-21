@@ -43,6 +43,30 @@ interface SanctuaryScreenProps {
   onDismissHint?: () => void;
 }
 
+function SettingSwitch({
+  label,
+  hint,
+  value,
+  color,
+  onValueChange,
+}: {
+  label: string;
+  hint: string;
+  value: boolean;
+  color: string;
+  onValueChange: (value: boolean) => void;
+}) {
+  return (
+    <View style={styles.row}>
+      <View style={styles.rowCopy}>
+        <Text style={[styles.rowLabel, { color }]}>{label}</Text>
+        <Text style={styles.rowHint}>{hint}</Text>
+      </View>
+      <Switch value={value} onValueChange={onValueChange} />
+    </View>
+  );
+}
+
 export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
   settings,
   theme,
@@ -79,7 +103,10 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
       {hint && onDismissHint ? <FirstHint text={hint} onDismiss={onDismissHint} /> : null}
 
       {/* Background Themes */}
-      <Text style={styles.sectionLabel}>Background Theme</Text>
+      <Text style={styles.sectionLabel}>Look</Text>
+      {isReverseTrialActive && !isPaidPro ? (
+        <Text style={styles.rowHint}>Yours for 3 days.</Text>
+      ) : null}
       <View style={styles.themeGrid}>
         {THEME_LIST.map((item) => {
           const unlocked = canUseTheme(entitlement, item.id);
@@ -104,7 +131,7 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
       </View>
 
       {/* Step Goal & Toggles */}
-      <Text style={styles.sectionLabel}>Daily Goal & Rituals</Text>
+      <Text style={styles.sectionLabel}>Goal and sleep</Text>
       <View style={styles.card}>
         <View style={styles.row}>
           <Text style={[styles.rowLabel, { color: theme.primaryText }]}>Daily Step Goal</Text>
@@ -205,65 +232,48 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
           </View>
         </View>
 
-        <View style={styles.row}>
-          <Text style={[styles.rowLabel, { color: theme.primaryText }]}>
-            Sound Effects (Match Strike)
-          </Text>
-          <Switch
-            value={settings.soundEffectsEnabled}
-            onValueChange={(val) => onUpdateSettings({ soundEffectsEnabled: val })}
-          />
-        </View>
-
-        <View style={styles.row}>
-          <Text style={[styles.rowLabel, { color: theme.primaryText }]}>
-            Lantern Mode (100% Glow)
-          </Text>
-          <Switch
-            value={settings.lanternModeEnabled}
-            onValueChange={(val) => onUpdateSettings({ lanternModeEnabled: val })}
-          />
-        </View>
-
-        <View style={styles.row}>
-          <Text style={[styles.rowLabel, { color: theme.primaryText }]}>
-            Live Breeze Shake (Mic)
-          </Text>
-          <Switch
-            value={settings.liveBreezeEnabled}
-            onValueChange={(val) => onUpdateSettings({ liveBreezeEnabled: val })}
-          />
-        </View>
-
-        <View style={styles.row}>
-          <Text style={[styles.rowLabel, { color: theme.primaryText }]}>
-            Mic Blow-Out at Bedtime
-          </Text>
-          <Switch
-            value={settings.micBlowOutEnabled}
-            onValueChange={(val) => onUpdateSettings({ micBlowOutEnabled: val })}
-          />
-        </View>
-
-        <View style={styles.row}>
-          <Text style={[styles.rowLabel, { color: theme.primaryText }]}>
-            iOS Sleep Focus Sync
-          </Text>
-          <Switch
-            value={settings.sleepFocusSyncEnabled}
-            onValueChange={(val) => onUpdateSettings({ sleepFocusSyncEnabled: val })}
-          />
-        </View>
-
-        <View style={styles.row}>
-          <Text style={[styles.rowLabel, { color: theme.primaryText }]}>
-            Evening Last-Light Nudge
-          </Text>
-          <Switch
-            value={settings.eveningNudgeEnabled !== false}
-            onValueChange={(val) => onUpdateSettings({ eveningNudgeEnabled: val })}
-          />
-        </View>
+        <SettingSwitch
+          label="Sound"
+          hint="Plays when the lighter strikes."
+          value={settings.soundEffectsEnabled}
+          color={theme.primaryText}
+          onValueChange={(val) => onUpdateSettings({ soundEffectsEnabled: val })}
+        />
+        <SettingSwitch
+          label="Brighter flame"
+          hint="Fills the room."
+          value={settings.lanternModeEnabled}
+          color={theme.primaryText}
+          onValueChange={(val) => onUpdateSettings({ lanternModeEnabled: val })}
+        />
+        <SettingSwitch
+          label="Shake the flame"
+          hint="A breath moves it."
+          value={settings.liveBreezeEnabled}
+          color={theme.primaryText}
+          onValueChange={(val) => onUpdateSettings({ liveBreezeEnabled: val })}
+        />
+        <SettingSwitch
+          label="Blow out by voice"
+          hint="Works at bedtime."
+          value={settings.micBlowOutEnabled}
+          color={theme.primaryText}
+          onValueChange={(val) => onUpdateSettings({ micBlowOutEnabled: val })}
+        />
+        <SettingSwitch
+          label="Sleep Focus"
+          hint="Sleeps when the iPhone does."
+          value={settings.sleepFocusSyncEnabled}
+          color={theme.primaryText}
+          onValueChange={(val) => onUpdateSettings({ sleepFocusSyncEnabled: val })}
+        />
+        <SettingSwitch
+          label="Evening reminder"
+          hint="The last nudge before bed."
+          value={settings.eveningNudgeEnabled !== false}
+          color={theme.primaryText}
+          onValueChange={(val) => onUpdateSettings({ eveningNudgeEnabled: val })}
+        />
 
         <View style={styles.row}>
           <Text style={[styles.rowLabel, { color: theme.primaryText }]}>Candle Name</Text>
@@ -271,7 +281,7 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
             style={styles.nameInput}
             value={settings.candleName ?? ''}
             onChangeText={(t) => onUpdateSettings({ candleName: t.slice(0, 12) })}
-            placeholder="e.g. Solace"
+            placeholder="Your name"
             placeholderTextColor="#71717A"
             maxLength={12}
             returnKeyType="done"
@@ -279,7 +289,7 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
         </View>
 
         <View style={styles.row}>
-          <Text style={[styles.rowLabel, { color: theme.primaryText }]}>Glass Domes Owned</Text>
+          <Text style={[styles.rowLabel, { color: theme.primaryText }]}>Rest days</Text>
           <Text style={[styles.goalVal, { color: theme.accent }]}>{glassDomesOwned}</Text>
         </View>
       </View>
@@ -288,7 +298,7 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
       <View style={styles.card}>
         {isReverseTrialActive && !isPaidPro && (
           <Text style={styles.trialBannerText}>
-            3-Day Full Access Active • Unlock forever with Wick Pro
+            3 days of full access
           </Text>
         )}
         {!isPaidPro && (
@@ -325,14 +335,14 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
 
       {/* Version & Hidden Simulator Debugger */}
       <Pressable onPress={() => setDevTapCount((c) => c + 1)}>
-        <Text style={styles.version}>Wick v1.0.0 • Local-First</Text>
+        <Text style={styles.version}>Wick 1.0.0</Text>
       </Pressable>
 
       <Pressable
         style={styles.supportLink}
         onPress={() => void Linking.openURL(SUPPORT_URL).catch(() => {})}
       >
-        <Text style={styles.supportText}>Support & Help</Text>
+        <Text style={styles.supportText}>Support</Text>
       </Pressable>
 
       {showDebugger && onDebugInjectSteps && (
@@ -378,6 +388,8 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   rowLabel: { fontSize: 15, fontWeight: '500' },
+  rowCopy: { flex: 1, paddingRight: 12, gap: 2 },
+  rowHint: { color: '#A1A1AA', fontSize: 12, lineHeight: 16 },
   stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   stepBtn: {
     width: 28,
