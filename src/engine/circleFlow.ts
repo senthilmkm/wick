@@ -1,3 +1,4 @@
+import { friendIsInRain } from './firstRunCopy';
 import { CandleState, FriendCandle } from '../types/wick';
 
 export const NUDGE_COOLDOWN_MS = 5 * 60 * 1000;
@@ -53,7 +54,10 @@ export function withNudgeCooldown(
   return { ...current, [friendId]: nowMs };
 }
 
-export function nudgeBody(friend: Pick<FriendCandle, 'state' | 'streakDays'>): string {
+export function nudgeBody(friend: { state: string; streakDays: number }): string {
+  if (friendIsInRain(friend.state)) {
+    return 'Your wick is in the rain. A short walk keeps it bright.';
+  }
   const stateLabel = friend.state.toLowerCase().replace(/_/g, ' ');
   return `Your Wick candle is ${stateLabel}. A short walk keeps your ${friend.streakDays}-day streak glowing.`;
 }

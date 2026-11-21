@@ -4,7 +4,14 @@ import {
   CIRCLE_EMPTY_BODY,
   CIRCLE_INVITE_SENT_BODY,
   flameCoachLine,
+  friendIsInRain,
+  friendRainLine,
+  rainClearedByWalk,
+  rainStaysUntilWalk,
+  shortWalkLine,
+  shortWalkSteps,
   shouldShowLighter,
+  stateForFriends,
   celebrationLine,
   GOAL_FULL_LINE,
   nextStreakBandLine,
@@ -88,6 +95,47 @@ describe('onboarding flow regression', () => {
     expect(candleStateLabel('UNLIT_MORNING')).toBe('Unlit');
     expect(candleStateLabel('IGNITING')).toBe('Lighting');
     expect(candleStateLabel('OTHER')).toBe('Candle');
+    expect(candleStateLabel('RAIN')).toBe('In the rain');
+    expect(shortWalkLine(8000)).toBe('10 minutes makes the flame brighter.');
+    expect(shortWalkLine(1000)).toBe('10 minutes makes the flame brighter.');
+    expect(shortWalkLine(840)).toBe('8 minutes makes the flame brighter.');
+    expect(shortWalkLine(50)).toBe('1 minute makes the flame brighter.');
+    expect(shortWalkLine(0)).toBe('1 minute makes the flame brighter.');
+    expect(shortWalkLine(Number.NaN)).toBe('1 minute makes the flame brighter.');
+    expect(shortWalkLine(-20)).toBe('1 minute makes the flame brighter.');
+    expect(shortWalkSteps(8000)).toBe(1000);
+    expect(shortWalkSteps(840)).toBe(800);
+    expect(shortWalkSteps(50)).toBe(100);
+    expect(shortWalkSteps(0)).toBe(100);
+    expect(shortWalkSteps(Number.NaN)).toBe(100);
+    expect(shortWalkSteps(-20)).toBe(100);
+    expect(rainClearedByWalk(1, 1000)).toBe(false);
+    expect(rainClearedByWalk(999, 1000)).toBe(false);
+    expect(rainClearedByWalk(1000, 1000)).toBe(true);
+    expect(rainClearedByWalk(1001, 1000)).toBe(true);
+    expect(rainClearedByWalk(Number.NaN, 1000)).toBe(false);
+    expect(rainClearedByWalk(-1, 1000)).toBe(false);
+    expect(rainClearedByWalk(1000, Number.NaN)).toBe(false);
+    expect(rainClearedByWalk(1000, 0)).toBe(false);
+    const held = {
+      goalMet: false,
+      ignitedAt: 1,
+      state: 'BLAZING',
+      stepsGained: 1,
+      stepsNeeded: 1000,
+    };
+    expect(rainStaysUntilWalk(held)).toBe(true);
+    expect(rainStaysUntilWalk({ ...held, stepsGained: 1000 })).toBe(false);
+    expect(rainStaysUntilWalk({ ...held, goalMet: true })).toBe(false);
+    expect(rainStaysUntilWalk({ ...held, ignitedAt: null })).toBe(false);
+    expect(rainStaysUntilWalk({ ...held, ignitedAt: Number.NaN })).toBe(false);
+    expect(rainStaysUntilWalk({ ...held, state: 'NIGHT_SLEEP' })).toBe(false);
+    expect(stateForFriends('BLAZING', false)).toBe('BLAZING');
+    expect(stateForFriends('BLAZING', true)).toBe('RAIN');
+    expect(friendIsInRain('RAIN')).toBe(true);
+    expect(friendIsInRain('BLAZING')).toBe(false);
+    expect(friendRainLine('Alex')).toBe('Alex is in the rain.');
+    expect(friendRainLine('  ')).toBe('A friend is in the rain.');
     expect(CIRCLE_EMPTY_BODY).toBe('When they accept, you both show up here.');
     expect(CIRCLE_INVITE_SENT_BODY).toBe('Invite sent. They show up here when they open Wick.');
     expect(WICK_LIT_LINE).toBe('Your wick is lit.');

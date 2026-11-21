@@ -5,7 +5,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Candle3DCanvas } from '../components/Candle3DCanvas';
 import { InfoModal } from '../components/InfoModal';
 import { formatTimeLeftLabel } from '../engine/candleMath';
-import { rainNudgeOn } from '../engine/firstRunCopy';
+import {
+  rainClearedByWalk,
+  rainNudgeOn,
+  rainStaysUntilWalk,
+  shortWalkLine,
+  shortWalkSteps,
+} from '../engine/firstRunCopy';
 import { DAILY_SHARE_BUTTON_TITLE } from '../services/shareCardService';
 import { playRainNudge, stopRainNudge } from '../services/soundService';
 import { CandleSnapshot, ThemeId, UserSettings, WaxLayer, WickTheme } from '../types/wick';
@@ -33,6 +39,7 @@ interface FlameScreenProps {
   showLighter?: boolean;
   trialLooks?: WickTheme[] | null;
   onSelectLook?: (themeId: ThemeId) => void;
+  onRainChange?: (on: boolean) => void;
 }
 
 export const FlameScreen: React.FC<FlameScreenProps> = ({
@@ -58,6 +65,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
   showLighter = false,
   trialLooks = null,
   onSelectLook,
+  onRainChange,
 }) => {
   const insets = useSafeAreaInsets();
   const [showActionsSheet, setShowActionsSheet] = useState(false);
@@ -66,14 +74,15 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
   const lastStepsRef = useRef(snapshot.stepsToday);
   const lastDateKeyRef = useRef(snapshot.dateKey);
   const lastStepActivityAtRef = useRef(snapshot.updatedAt || Date.now());
+  const rainStartStepsRef = useRef<number | null>(null);
+  const rainStepsNeededRef = useRef<number | null>(null);
 
-  if (
-    snapshot.dateKey !== lastDateKeyRef.current ||
-    snapshot.stepsToday !== lastStepsRef.current
-  ) {
-    lastStepActivityAtRef.current = Date.now();
+  if (snapshot.dateKey !== lastDateKeyRef.current) {
     lastDateKeyRef.current = snapshot.dateKey;
     lastStepsRef.current = snapshot.stepsToday;
+    lastStepActivityAtRef.current = Date.now();
+    rainStartStepsRef.current = null;
+    rainStepsNeededRef.current = null;
   }
 
   useEffect(() => {
@@ -84,13 +93,45 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
   const stepsRemaining = Math.max(0, settings.dailyStepGoal - snapshot.stepsToday);
   const goalMet = stepsRemaining === 0;
   const goalRatio = Math.min(1, snapshot.stepsToday / Math.max(1, settings.dailyStepGoal));
-  const walkMins = Math.max(1, Math.round(stepsRemaining / 100));
-  const rainOn = rainNudgeOn({
-    goalMet,
-    ignitedAt: snapshot.ignitedAt,
-    state: snapshot.state,
-    stillForMs: Date.now() - lastStepActivityAtRef.current,
-  });
+  const rainHeld =
+    rainStartStepsRef.current != null &&
+    rainStepsNeededRef.current != null &&
+    rainStaysUntilWalk({
+      goalMet,
+      ignitedAt: snapshot.ignitedAt,
+      state: snapshot.state,
+      stepsGained: snapshot.stepsToday - rainStartStepsRef.current,
+      stepsNeeded: rainStepsNeededRef.current,
+    });
+  if (rainStartStepsRef.current != null && !rainHeld) {
+    rainStartStepsRef.current = null;
+    rainStepsNeededRef.current = null;
+    lastStepsRef.current = snapshot.stepsToday;
+    lastStepActivityAtRef.current = Date.now();
+  } else if (rainStartStepsRef.current == null) {
+    const gained = snapshot.stepsToday - lastStepsRef.current;
+    const needed = shortWalkSteps(Math.max(0, settings.dailyStepGoal - lastStepsRef.current));
+    if (gained > 0 && rainClearedByWalk(gained, needed)) {
+      lastStepsRef.current = snapshot.stepsToday;
+      lastStepActivityAtRef.current = Date.now();
+    }
+  }
+  const rainOn =
+    rainHeld ||
+    rainNudgeOn({
+      goalMet,
+      ignitedAt: snapshot.ignitedAt,
+      state: snapshot.state,
+      stillForMs: Date.now() - lastStepActivityAtRef.current,
+    });
+  if (rainOn && rainStartStepsRef.current == null) {
+    rainStartStepsRef.current = snapshot.stepsToday;
+    rainStepsNeededRef.current = shortWalkSteps(stepsRemaining);
+  }
+
+  useEffect(() => {
+    onRainChange?.(rainOn);
+  }, [rainOn, onRainChange]);
 
   useEffect(() => {
     if (!rainOn || !settings.soundEffectsEnabled) {
@@ -149,15 +190,11 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
             />
           </View>
           <Text style={styles.timeLeftSub} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
-            {goalMet
-              ? timeLeftLabel === 'Goal reached'
-                ? 'Goal reached!'
-                : `Goal reached! • ${timeLeftLabel}`
-              : `${stepsRemaining.toLocaleString('en-US')} to go (~${walkMins}m walk) • ${timeLeftLabel}`}
+            {goalMet ? (timeLeftLabel === 'Goal reached' ? 'Goal reached!' : timeLeftLabel) : shortWalkLine(stepsRemaining)}
           </Text>
         </View>
         <View style={styles.topRightActions}>
-          {needsSpark && (
+          {(needsSpark || rainOn) && (
             <Pressable style={styles.sparkBtn} onPress={onSendSpark}>
               <Text style={styles.sparkBtnText}>Ask for Spark</Text>
             </Pressable>

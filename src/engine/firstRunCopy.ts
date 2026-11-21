@@ -46,6 +46,8 @@ export function candleStateLabel(state: string): string {
       return 'Unlit';
     case 'IGNITING':
       return 'Lighting';
+    case 'RAIN':
+      return 'In the rain';
     default:
       return 'Candle';
   }
@@ -57,6 +59,8 @@ export function tabsShouldHide(activeTab: string, hasOpenedAnotherTab: boolean):
 
 export const STEPS_OFF_LINE = 'Steps are off. Turn them on in Settings, or tap the lighter.';
 export const RAIN_STILL_MS = 60 * 60 * 1000;
+const STEPS_PER_WALK_MINUTE = 100;
+const SHORT_WALK_CAP_MINUTES = 10;
 
 const QUIET_FLAME_STATES = new Set([
   'NIGHT_SLEEP',
@@ -65,6 +69,54 @@ const QUIET_FLAME_STATES = new Set([
   'EXTINGUISHED',
   'UNLIT_MORNING',
 ]);
+
+function shortWalkMinutes(stepsRemaining: number): number {
+  const steps = Number.isFinite(stepsRemaining) ? Math.max(0, stepsRemaining) : 0;
+  return Math.min(SHORT_WALK_CAP_MINUTES, Math.max(1, Math.round(steps / STEPS_PER_WALK_MINUTE)));
+}
+
+export function shortWalkSteps(stepsRemaining: number): number {
+  return shortWalkMinutes(stepsRemaining) * STEPS_PER_WALK_MINUTE;
+}
+
+export function shortWalkLine(stepsRemaining: number): string {
+  const minutes = shortWalkMinutes(stepsRemaining);
+  const unit = minutes === 1 ? 'minute' : 'minutes';
+  return `${minutes} ${unit} makes the flame brighter.`;
+}
+
+export function rainClearedByWalk(stepsGained: number, stepsNeeded: number): boolean {
+  if (!Number.isFinite(stepsGained) || stepsGained < 0) return false;
+  if (!Number.isFinite(stepsNeeded) || stepsNeeded <= 0) return false;
+  return stepsGained >= stepsNeeded;
+}
+
+export function rainStaysUntilWalk(input: {
+  goalMet: boolean;
+  ignitedAt: number | null;
+  state: string;
+  stepsGained: number;
+  stepsNeeded: number;
+}): boolean {
+  if (input.goalMet) return false;
+  if (input.ignitedAt == null || !Number.isFinite(input.ignitedAt)) return false;
+  if (QUIET_FLAME_STATES.has(input.state)) return false;
+  return !rainClearedByWalk(input.stepsGained, input.stepsNeeded);
+}
+export const RAIN_FRIEND_STATE = 'RAIN';
+
+export function stateForFriends(state: string, inRain: boolean): string {
+  return inRain ? RAIN_FRIEND_STATE : state;
+}
+
+export function friendIsInRain(state: string): boolean {
+  return state === RAIN_FRIEND_STATE;
+}
+
+export function friendRainLine(name: string): string {
+  const who = name.trim() || 'A friend';
+  return `${who} is in the rain.`;
+}
 
 export function rainNudgeOn(input: {
   goalMet: boolean;

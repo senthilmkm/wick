@@ -363,10 +363,12 @@ describe('themes, storage, motion, audio, export & CloudKit regression tests', (
   it('syncs CloudKit Shared DB friend candles with 15-min debounce and iCloud check', async () => {
     let signedIn = false;
     let upserts = 0;
+    let lastState = '';
     const ck = new CloudKitCircleService({
       isICloudSignedIn: async () => signedIn,
-      upsertOwnCandleRecord: async () => {
+      upsertOwnCandleRecord: async (payload) => {
         upserts += 1;
+        lastState = payload.state;
       },
       createFriendShareUrl: async () => 'https://icloud.com/share/wick-1',
       fetchSharedFriendCandles: async () => [
@@ -389,7 +391,12 @@ describe('themes, storage, motion, audio, export & CloudKit regression tests', (
     expect(await ck.syncOwnCandleIfNeeded('Alex', snap, 2000)).toBe(false);
     expect(await ck.syncOwnCandleIfNeeded('Alex', snap, 2500, true)).toBe(true);
     expect(await ck.syncOwnCandleIfNeeded('Alex', snap, 2500 + 15 * 60 * 1000)).toBe(true);
-    expect(upserts).toBe(3);
+    expect(await ck.syncOwnCandleIfNeeded('Alex', snap, 2500 + 15 * 60 * 1000 + 1, false, true)).toBe(true);
+    expect(lastState).toBe('RAIN');
+    expect(await ck.syncOwnCandleIfNeeded('Alex', snap, 2500 + 15 * 60 * 1000 + 2, false, true)).toBe(false);
+    expect(await ck.syncOwnCandleIfNeeded('Alex', snap, 2500 + 15 * 60 * 1000 + 3, false, false)).toBe(true);
+    expect(lastState).toBe(snap.state);
+    expect(upserts).toBe(5);
     expect(await ck.inviteFriendToLockScreen({
       displayName: 'Alex',
       state: 'BLAZING',

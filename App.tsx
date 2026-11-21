@@ -74,6 +74,7 @@ import {
   savedDayLine,
   streakBandLine,
   shouldShowLighter,
+  stateForFriends,
   WICK_LIT_LINE,
   TAB_HINTS,
   tabsShouldHide,
@@ -182,6 +183,8 @@ const ensureVisitorId = (): string => {
   return created;
 };
 
+let friendsSeeRain = false;
+
 const publishMyCandleToFriends = (
   snap: Pick<CandleSnapshot, 'state' | 'flameIntensity' | 'streakDays'>,
   displayName: string
@@ -189,7 +192,7 @@ const publishMyCandleToFriends = (
   void publishNativeVisitorCandle({
     visitorId: ensureVisitorId(),
     displayName: displayName.trim() || 'Wick',
-    state: snap.state,
+    state: stateForFriends(snap.state, friendsSeeRain),
     flameIntensity: snap.flameIntensity,
     streakDays: snap.streakDays,
     updatedAt: Date.now(),
@@ -330,6 +333,8 @@ function WickRoot() {
   const seenNudgeIdsRef = useRef<Set<string>>(new Set());
   const checkingSparkRescuesRef = useRef(false);
   const snapshotRef = useRef<CandleSnapshot | null>(null);
+  const rainOnRef = useRef(false);
+  const [friendRain, setFriendRain] = useState(false);
   const sharingCandleRef = useRef(false);
   const exportingPdfRef = useRef(false);
 
@@ -391,6 +396,17 @@ function WickRoot() {
   const entitlementRef = useRef(entitlement);
   const friendsRef = useRef(friends);
   const settingsRef = useRef(settings);
+  const handleRainChange = useCallback((on: boolean) => {
+    if (friendsSeeRain === on) return;
+    friendsSeeRain = on;
+    rainOnRef.current = on;
+    setFriendRain(on);
+    const snap = snapshotRef.current;
+    if (!snap) return;
+    const name = settingsRef.current.candleName?.trim() || 'Wick';
+    void cloudKitService.syncOwnCandleIfNeeded(name, snap, Date.now(), true, on).catch(() => {});
+    publishMyCandleToFriends(snap, name);
+  }, []);
   useEffect(() => {
     entitlementRef.current = entitlement;
   }, [entitlement]);
@@ -531,7 +547,7 @@ function WickRoot() {
         storageService.saveSnapshot(res.snapshot, Date.now());
         void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(res.snapshot)).catch(() => {});
         const ownerLabel = settingsRef.current.candleName?.trim() || 'Friend';
-        void cloudKitService.syncOwnCandleIfNeeded(ownerLabel, res.snapshot, Date.now()).catch(() => {});
+        void cloudKitService.syncOwnCandleIfNeeded(ownerLabel, res.snapshot, Date.now(), false, friendsSeeRain).catch(() => {});
         publishMyCandleToFriends(res.snapshot, ownerLabel);
         return res.snapshot;
       });
@@ -1534,7 +1550,7 @@ function WickRoot() {
       }
       if (partial.candleName !== undefined && partial.candleName.trim().length > 0) {
         void cloudKitService
-          .syncOwnCandleIfNeeded(partial.candleName.trim(), snapshot, Date.now(), true)
+          .syncOwnCandleIfNeeded(partial.candleName.trim(), snapshot, Date.now(), true, friendsSeeRain)
           .catch(() => {});
         publishMyCandleToFriends(snapshot, partial.candleName.trim());
       }
@@ -1661,7 +1677,7 @@ function WickRoot() {
   };
 
   const handleSendSpark = async () => {
-    if (!canAskForSpark(snapshotRef.current?.state ?? snapshot.state)) {
+    if (!canAskForSpark(snapshotRef.current?.state ?? snapshot.state) && !rainOnRef.current) {
       showToast('Ask for Spark when your flame is flickering, an ember, smoking, or out.');
       return;
     }
@@ -1741,7 +1757,7 @@ function WickRoot() {
       setShowCandleNameModal(true);
       return;
     }
-    await cloudKitService.syncOwnCandleIfNeeded(effectiveName, snapshot, Date.now(), true).catch(() => {});
+    await cloudKitService.syncOwnCandleIfNeeded(effectiveName, snapshot, Date.now(), true, friendsSeeRain).catch(() => {});
     publishMyCandleToFriends(snapshot, effectiveName);
     const ckShareUrl = await cloudKitService
       .inviteFriendToLockScreen({
@@ -2048,6 +2064,7 @@ function WickRoot() {
             isPro: allowProNow,
             trialExpired: accessReady ? entitlement.trialExpired : true,
           }, trustedNowMs)}
+          onRainChange={handleRainChange}
           onStrikeLighter={() => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
             void playMatchStrikeSound(settings.soundEffectsEnabled, settings.liveBreezeEnabled);
@@ -2179,7 +2196,7 @@ function WickRoot() {
           onInviteFriend={() => {
             void handleInviteFriend();
           }}
-          canAskSpark={canAskForSpark(snapshot.state)}
+          canAskSpark={canAskForSpark(snapshot.state) || friendRain}
           onSendSpark={() => {
             void handleSendSpark();
           }}

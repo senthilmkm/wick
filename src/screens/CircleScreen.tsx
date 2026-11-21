@@ -3,7 +3,13 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { Swipeable } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FirstHint } from '../components/FirstHint';
-import { candleStateLabel, CIRCLE_EMPTY_BODY, CIRCLE_INVITE_SENT_BODY } from '../engine/firstRunCopy';
+import {
+  candleStateLabel,
+  CIRCLE_EMPTY_BODY,
+  CIRCLE_INVITE_SENT_BODY,
+  friendIsInRain,
+  friendRainLine,
+} from '../engine/firstRunCopy';
 import { ActiveSparkRescue, FriendCandle, WickTheme } from '../types/wick';
 
 interface CircleScreenProps {
@@ -131,7 +137,9 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
                   {friend.displayName}
                 </Text>
                 <Text style={styles.friendMeta}>
-                  {candleStateLabel(friend.state)} • {friend.streakDays}d streak
+                  {friendIsInRain(friend.state)
+                    ? friendRainLine(friend.displayName)
+                    : `${candleStateLabel(friend.state)} • ${friend.streakDays}d streak`}
                 </Text>
               </View>
               <Pressable

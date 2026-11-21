@@ -58,6 +58,9 @@ describe('circle pairing, nudge, and spark regression', () => {
     expect(readNudgeCooldowns('not-json')).toEqual({});
     expect(readNudgeCooldowns(JSON.stringify({ a: 5, b: 'no' }))).toEqual({ a: 5 });
     expect(withNudgeCooldown({ a: 5 }, 'b', 9)).toEqual({ a: 5, b: 9 });
+    expect(nudgeBody({ state: 'RAIN', streakDays: 4 })).toBe(
+      'Your wick is in the rain. A short walk keeps it bright.'
+    );
     expect(nudgeBody({ state: 'SMOKING_GRACE', streakDays: 4 })).toBe(
       'Your Wick candle is smoking grace. A short walk keeps your 4-day streak glowing.'
     );

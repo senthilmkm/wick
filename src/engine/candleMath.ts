@@ -137,6 +137,12 @@ export function flameFromSteps(stepsToday: number, dailyStepGoal: number): numbe
   return clamp(0.2 + (steps / goal) * 0.8, 0.2, 1);
 }
 
+export function flameInRain(intensity: number, inRain: boolean): number {
+  const base = Number.isFinite(intensity) ? clamp(intensity, 0, 1) : 0;
+  if (!inRain || base <= 0) return base;
+  return Math.min(base, Math.max(0.12, base * 0.45));
+}
+
 export function computeFlameIntensity(state: CandleState, paceRatio: number): number {
   switch (state) {
     case 'UNLIT_MORNING':

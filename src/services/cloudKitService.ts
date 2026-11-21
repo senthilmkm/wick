@@ -1,3 +1,4 @@
+import { stateForFriends } from '../engine/firstRunCopy';
 import { CandleSnapshot, FriendCandle } from '../types/wick';
 
 export interface CloudKitDriver {
@@ -32,14 +33,16 @@ export class CloudKitCircleService {
     displayName: string,
     snapshot: CandleSnapshot,
     nowMs: number,
-    force = false
+    force = false,
+    inRain = false
   ): Promise<boolean> {
     const signedIn = await this.driver.isICloudSignedIn();
     if (!signedIn) {
       return false;
     }
 
-    const stateChanged = this.lastPublishedState !== snapshot.state;
+    const publishedState = stateForFriends(snapshot.state, inRain);
+    const stateChanged = this.lastPublishedState !== publishedState;
     const fifteenMinutesElapsed = nowMs - this.lastPublishedAt >= 15 * 60 * 1000;
     if (!force && !stateChanged && !fifteenMinutesElapsed) {
       return false;
@@ -47,13 +50,13 @@ export class CloudKitCircleService {
 
     await this.driver.upsertOwnCandleRecord({
       displayName,
-      state: snapshot.state,
+      state: publishedState,
       flameIntensity: snapshot.flameIntensity,
       streakDays: snapshot.streakDays,
       updatedAt: nowMs,
     });
 
-    this.lastPublishedState = snapshot.state;
+    this.lastPublishedState = publishedState;
     this.lastPublishedAt = nowMs;
     return true;
   }

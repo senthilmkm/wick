@@ -24,6 +24,7 @@ import {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
+import { flameInRain } from '../engine/candleMath';
 import { CandleSnapshot, WaxLayer, WickTheme } from '../types/wick';
 
 interface Candle3DCanvasProps {
@@ -221,7 +222,7 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
   const wickBaseY = candleTop + 6;
   const flameBaseY = wickBaseY - 14;
 
-  const intensity = snapshot.flameIntensity;
+  const intensity = flameInRain(snapshot.flameIntensity, sedentaryDraft);
   const isNight = snapshot.state === 'NIGHT_SLEEP';
   const flameH = Math.round(30 + intensity * 58);
   const flameW = Math.round(18 + intensity * 25);
