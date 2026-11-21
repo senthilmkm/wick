@@ -6,24 +6,20 @@ import { ActiveSparkRescue, FriendCandle, WickTheme } from '../types/wick';
 
 const PAIR_STEPS = [
   {
-    step: '1. Sign in to iCloud (Both Phones)',
-    body: 'Make sure both you and your friend are signed in to iCloud in iPhone Settings.',
+    step: '1. Sign in to iCloud',
+    body: 'Both phones need to be signed in to iCloud in iPhone Settings.',
   },
   {
-    step: '2. Send Your Invite',
-    body: 'Tap "+ Pair Widget". Wick sends an iCloud link. Both phones need to be signed in to iCloud.',
+    step: '2. Send one invite',
+    body: 'Tap Invite. Your friend accepts that iCloud link. You both see each other in Circle. Nobody sends a second link.',
   },
   {
-    step: '3. Pair Both Ways',
-    body: 'When your friend taps your link, they see your candle. Have them tap "+ Pair Widget" and send their link back so you see theirs too!',
+    step: '3. Your lock screen stays yours',
+    body: 'The Wick widget shows your candle and streak. Your friend’s candle stays here in Circle.',
   },
   {
-    step: '4. Add the Lock Screen Widget',
-    body: 'Add the Wick widget from the lock screen. After a friend accepts your iCloud invite, that widget shows their candle. With nobody paired, it shows yours.',
-  },
-  {
-    step: '5. Nudge & Ask for Spark (500 Steps)',
-    body: 'Tap Nudge to cheer a paired friend inside Wick. If your flame is low, tap Ask for Spark. A paired friend sees the rescue in Circle. Someone who is not paired yet gets an iCloud link.',
+    step: '4. Nudge and Spark',
+    body: 'Nudge opens a text with their name and flame. Ask for Spark is a 500-step rescue once someone is paired. With nobody paired, it opens a text.',
   },
 ];
 
@@ -71,13 +67,13 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
             style={[styles.inviteBtn, { backgroundColor: theme.accent }]}
             onPress={onInviteFriend}
           >
-            <Text style={styles.inviteText}>+ Pair Widget</Text>
+            <Text style={styles.inviteText}>Invite</Text>
           </Pressable>
           <Pressable
             style={styles.infoBtn}
             onPress={() => setInfoVisible(true)}
             accessibilityRole="button"
-            accessibilityLabel="How Pair Widget works"
+            accessibilityLabel="How inviting a friend works"
           >
             <Text style={styles.infoBtnText}>i</Text>
           </Pressable>
@@ -91,7 +87,7 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
               Ask a Friend for Spark
             </Text>
             <Text style={styles.sparkAskBody}>
-              A paired friend sees this in Wick and can walk 500 steps. If you are not paired yet, Wick opens an iCloud link you can send.
+              A paired friend gets a 500-step rescue in Wick. With nobody paired yet, Wick opens a text you can send.
             </Text>
           </View>
           <Pressable
@@ -132,10 +128,10 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
       {friends.length === 0 ? (
         <View style={styles.emptyCard}>
           <Text style={[styles.emptyTitle, { color: theme.primaryText }]}>
-            Multiplayer Lock Screen Widgets
+            Walk with one friend
           </Text>
           <Text style={styles.emptyBody}>
-            Pair through iCloud. The lock screen widget then shows their candle. The round widget keeps your streak.
+            Send one iCloud invite. When they accept, you both show up here. Your lock screen keeps your own candle.
           </Text>
         </View>
       ) : (
@@ -202,13 +198,13 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
         <View style={styles.modalBackdrop}>
           <View style={styles.modalSheet}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>How Pair Widget Works</Text>
+              <Text style={styles.modalTitle}>How inviting works</Text>
               <Pressable onPress={() => setInfoVisible(false)}>
                 <Text style={styles.modalClose}>Done</Text>
               </Pressable>
             </View>
             <Text style={styles.modalSubtitle}>
-              Share your live candle with a partner or friend in 5 simple steps:
+              One invite. Both candles show up in Circle.
             </Text>
             <ScrollView style={styles.stepsList} contentContainerStyle={styles.stepsContent}>
               {PAIR_STEPS.map((item) => (

@@ -36,6 +36,14 @@ export interface WickNativeSpec {
   ): Promise<string>;
   acceptFriendShareUrl(shareUrl: string): Promise<boolean>;
   fetchSharedFriendCandles(): Promise<FriendCandle[]>;
+  publishVisitorCandle?(
+    visitorId: string,
+    displayName: string,
+    state: string,
+    flameIntensity: number,
+    streakDays: number,
+    updatedAt: number
+  ): Promise<boolean>;
   createSparkShareRecord?(
     sparkId: string,
     senderName: string,
@@ -251,6 +259,32 @@ export async function completeNativeSparkShare(
   }
   try {
     return await mod.completeSparkShareRecord(sparkId, stepsWalked);
+  } catch {
+    return false;
+  }
+}
+
+export async function publishNativeVisitorCandle(input: {
+  visitorId: string;
+  displayName: string;
+  state: string;
+  flameIntensity: number;
+  streakDays: number;
+  updatedAt: number;
+}): Promise<boolean> {
+  const mod = getNativeModule();
+  if (!mod?.publishVisitorCandle || !input.visitorId.trim()) {
+    return false;
+  }
+  try {
+    return await mod.publishVisitorCandle(
+      input.visitorId,
+      input.displayName,
+      input.state,
+      input.flameIntensity,
+      input.streakDays,
+      input.updatedAt
+    );
   } catch {
     return false;
   }

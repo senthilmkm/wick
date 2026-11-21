@@ -17,6 +17,7 @@ import {
   fetchNativeSharedPendingSparks,
   reloadNativeWidgets,
   sendNativeNudge,
+  publishNativeVisitorCandle,
   writeNativeFriendWidgetSnapshot,
   writeNativeWidgetSnapshot,
 } from '../src/services/nativeCloudBridge';
@@ -69,6 +70,26 @@ describe('nativeCloudBridge', () => {
     expect(await fetchNativeSharedPendingSparks()).toEqual([]);
     expect(await deleteNativeNudges([])).toBe(false);
     expect(await deleteNativeNudges(['n1'])).toBe(false);
+    expect(
+      await publishNativeVisitorCandle({
+        visitorId: 'maya',
+        displayName: 'Maya',
+        state: 'BLAZING',
+        flameIntensity: 1,
+        streakDays: 3,
+        updatedAt: 10,
+      })
+    ).toBe(false);
+    expect(
+      await publishNativeVisitorCandle({
+        visitorId: '   ',
+        displayName: 'Maya',
+        state: 'BLAZING',
+        flameIntensity: 1,
+        streakDays: 3,
+        updatedAt: 10,
+      })
+    ).toBe(false);
     writeNativeFriendWidgetSnapshot('');
 
     mockRequireOptionalNativeModule.mockImplementation(() => {
@@ -211,6 +232,7 @@ describe('nativeCloudBridge', () => {
         .mockResolvedValueOnce('nope')
         .mockRejectedValueOnce(new Error('pending')),
       deleteNudgeRecords: jest.fn().mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('nudge del')),
+      publishVisitorCandle: jest.fn().mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('visitor')),
     };
     mockRequireOptionalNativeModule.mockReturnValue(nudgeMod);
     expect(await deleteNativeCompletedSparks(['s1'])).toBe(true);
@@ -242,5 +264,26 @@ describe('nativeCloudBridge', () => {
     expect(await fetchNativeSharedPendingSparks()).toEqual([]);
     expect(await deleteNativeNudges(['n1'])).toBe(true);
     expect(await deleteNativeNudges(['n1'])).toBe(false);
+    expect(
+      await publishNativeVisitorCandle({
+        visitorId: 'maya',
+        displayName: 'Maya',
+        state: 'BLAZING',
+        flameIntensity: 1,
+        streakDays: 4,
+        updatedAt: 20,
+      })
+    ).toBe(true);
+    expect(nudgeMod.publishVisitorCandle).toHaveBeenCalledWith('maya', 'Maya', 'BLAZING', 1, 4, 20);
+    expect(
+      await publishNativeVisitorCandle({
+        visitorId: 'maya',
+        displayName: 'Maya',
+        state: 'BLAZING',
+        flameIntensity: 1,
+        streakDays: 4,
+        updatedAt: 20,
+      })
+    ).toBe(false);
   });
 });

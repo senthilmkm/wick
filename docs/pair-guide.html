@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>How Pair Widget Works • Wick</title>
+  <title>How to Invite a Friend • Wick</title>
   <style>
     :root {
       --bg: #0A0A0C;
@@ -273,12 +273,12 @@
 
   <div class="hero">
     <div class="badge">STEP-BY-STEP VISUAL GUIDE</div>
-    <h1>How Pair Widget Works</h1>
-    <p class="sub">Put your best friend’s live candle on your iPhone Lock Screen — and walk to keep each other’s flame alive.</p>
+    <h1>How to Invite a Friend</h1>
+    <p class="sub">Send one iCloud link. You both see each other’s candle in Circle, and your lock screen keeps your own flame.</p>
   </div>
 
   <div class="stage-card">
-    <div class="stage-caption" id="caption">Step 1: You tap "+ Pair Widget" and send your invite link.</div>
+    <div class="stage-caption" id="caption">Step 1: You tap Invite and send one iCloud link.</div>
     <div class="phones-row">
       <div class="phone active" id="phoneYou">
         <div class="notch"></div>
@@ -287,7 +287,7 @@
           <div class="flame" id="flameYou"></div>
           <div class="wax"></div>
         </div>
-        <div class="phone-status" id="statusYou">Tap + Pair Widget</div>
+        <div class="phone-status" id="statusYou">Tap Invite</div>
       </div>
 
       <div class="bridge">
@@ -309,7 +309,7 @@
     <div class="controls">
       <button class="step-pill active" onclick="setStep(0)">1. You Invite</button>
       <button class="step-pill" onclick="setStep(1)">2. Friend Taps</button>
-      <button class="step-pill" onclick="setStep(2)">3. Friend Invites Back</button>
+      <button class="step-pill" onclick="setStep(2)">3. You Both See Each Other</button>
       <button class="step-pill" onclick="setStep(3)">4. Lock Screen Widget</button>
       <button class="step-pill" onclick="setStep(4)">5. Spark Rescue</button>
     </div>
@@ -329,8 +329,8 @@
       <div class="step-num">1</div>
       <div>
         <span class="who you">What You Do</span>
-        <h2>Tap "+ Pair Widget" in the Circle tab</h2>
-        <p>Open Wick, tap the <strong>Circle</strong> tab at the bottom, and tap <strong>+ Pair Widget</strong>. Send the iCloud invite link to your friend by text message (iMessage or WhatsApp).</p>
+        <h2>Tap Invite in the Circle tab</h2>
+        <p>Open Wick, tap the <strong>Circle</strong> tab at the bottom, and tap <strong>Invite</strong>. Send the iCloud link to your friend.</p>
       </div>
     </div>
 
@@ -346,9 +346,9 @@
     <div class="step-card">
       <div class="step-num">3</div>
       <div>
-        <span class="who friend">For Two-Way Pairing</span>
-        <h2>Your friend sends their link back to you</h2>
-        <p>Now your friend opens their <strong>Circle</strong> tab, taps <strong>+ Pair Widget</strong>, and texts their link to you. Once you tap it, <strong>you see their candle too!</strong></p>
+        <span class="who both">Both Friends</span>
+        <h2>You both see each other</h2>
+        <p>After your friend accepts the one link, Wick saves their candle into that same share. You see them in Circle, and they see you. Nobody sends a second invite.</p>
       </div>
     </div>
 
@@ -357,7 +357,7 @@
       <div>
         <span class="who both">Both Friends</span>
         <h2>Add the Wick Widget to your Lock Screen</h2>
-        <p>Long-press your iPhone <strong>Lock Screen &rarr; Customize &rarr; Lock Screen &rarr; Add Widgets &rarr; Wick</strong>. Now you can check your flame anytime without even unlocking your phone.</p>
+        <p>Long-press your iPhone <strong>Lock Screen &rarr; Customize &rarr; Lock Screen &rarr; Add Widgets &rarr; Wick</strong>. The widget shows <strong>your</strong> candle and streak. Your friend’s candle stays in Circle.</p>
       </div>
     </div>
 
@@ -366,7 +366,7 @@
       <div>
         <span class="who both">Save Each Other!</span>
         <h2>Send a Spark when a flame is fading</h2>
-        <p>If your friend's candle starts smoking, they tap <strong>Ask for Spark</strong>. When you are already paired, the rescue shows up in your Circle. When you are not paired yet, they send an iCloud link. Walk <strong>500 steps</strong> and their candle can reignite.</p>
+        <p>Nudge opens a text with their name and flame. If their candle is low, they tap <strong>Ask for Spark</strong>. When you are already paired, the 500-step rescue shows up in Circle. With nobody paired, Wick opens a text.</p>
       </div>
     </div>
   </div>
@@ -378,7 +378,7 @@
   <script>
     const steps = [
       {
-        caption: 'Step 1: You tap "+ Pair Widget" and text your invite link to your friend.',
+        caption: 'Step 1: You tap Invite and send one iCloud link.',
         youActive: true, friendActive: false,
         youDim: false, friendDim: false,
         youStatus: 'Sending invite...', friendStatus: 'Waiting for link',
@@ -392,21 +392,21 @@
         packetText: 'Paired ✓', packetClass: 'packet both'
       },
       {
-        caption: 'Step 3: Your friend sends their "+ Pair Widget" link back so YOU see theirs too.',
+        caption: 'Step 3: They accept that one link, and you both see each other in Circle.',
         youActive: true, friendActive: true,
         youDim: false, friendDim: false,
-        youStatus: 'Sees FRIEND!', friendStatus: 'Sending back...',
-        packetText: '← Link back', packetClass: 'packet send-left'
+        youStatus: 'Sees FRIEND!', friendStatus: 'Sees YOU!',
+        packetText: 'Both ways', packetClass: 'packet both'
       },
       {
-        caption: 'Step 4: Add the Wick Widget to both Lock Screens to watch each other’s flame all day.',
+        caption: 'Step 4: The lock screen widget shows your own candle. Their candle stays in Circle.',
         youActive: true, friendActive: true,
         youDim: false, friendDim: false,
-        youStatus: '🔥 Blazing (8d)', friendStatus: '🔥 Blazing (12d)',
-        packetText: 'Live Sync', packetClass: 'packet both'
+        youStatus: 'Your widget', friendStatus: 'In Circle',
+        packetText: 'Your candle', packetClass: 'packet both'
       },
       {
-        caption: 'Step 5: Friend fading? Open the rescue in Circle, or tap their iCloud link, and walk 500 steps.',
+        caption: 'Step 5: Nudge is a text. A paired Spark shows up in Circle. Walk 500 steps.',
         youActive: true, friendActive: true,
         youDim: false, friendDim: true,
         youStatus: 'Walk 500 steps!', friendStatus: 'Relit by Spark!',

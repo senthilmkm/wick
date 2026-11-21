@@ -33,20 +33,16 @@ import {
 } from './src/engine/candleMath';
 import { reigniteFromSpark, activateGlassDome, createMorningSnapshot, evaluateCandleState, igniteWithLighter, removeGlassDome, triggerNightBlowOut } from './src/engine/candleStateMachine';
 import {
-  buildFriendWidgetPayload,
   canAskForSpark,
-  canSendNudge,
   classifySparkRescue,
   friendListChanged,
-  friendOwnerName,
   isForgeablePairLink,
-  nudgeBody,
+  nudgeShareMessage,
   pickIncomingSpark,
   readIdList,
-  readNudgeCooldowns,
   rememberId,
-  selectWidgetFriend,
-  withNudgeCooldown,
+  sparkAskText,
+  sparkAskUsesRescue,
 } from './src/engine/circleFlow';
 import {
   SPARK_EXPIRY_MS,
@@ -103,9 +99,8 @@ import {
   fetchNativeTrialAnchor,
   markNativeTrialAnchorExpired,
   peekNativeShareUrlKind,
+  publishNativeVisitorCandle,
   reloadNativeWidgets,
-  sendNativeNudge,
-  writeNativeFriendWidgetSnapshot,
   writeNativeWidgetSnapshot,
 } from './src/services/nativeCloudBridge';
 import {
@@ -162,11 +157,35 @@ const kvSet = (key: string, val: string): void => {
   }
 };
 
+const ensureVisitorId = (): string => {
+  const existing = kvGet(KEY_VISITOR_ID)?.trim();
+  if (existing) {
+    return existing;
+  }
+  const created = `c${Date.now().toString(36)}`;
+  kvSet(KEY_VISITOR_ID, created);
+  return created;
+};
+
+const publishMyCandleToFriends = (
+  snap: Pick<CandleSnapshot, 'state' | 'flameIntensity' | 'streakDays'>,
+  displayName: string
+) => {
+  void publishNativeVisitorCandle({
+    visitorId: ensureVisitorId(),
+    displayName: displayName.trim() || 'Wick',
+    state: snap.state,
+    flameIntensity: snap.flameIntensity,
+    streakDays: snap.streakDays,
+    updatedAt: Date.now(),
+  });
+};
+
 const KEY_ONBOARDED = 'wick.onboarded.v1';
 const KEY_PRO_CACHE = 'wick.pro_cached.v1';
 const KEY_FRIENDS = 'wick.friends.v1';
 const KEY_REMOVED_FRIENDS = 'wick.removed_friends.v1';
-const KEY_NUDGE_COOLDOWN = 'wick.nudge.cooldown.v1';
+const KEY_VISITOR_ID = 'wick.visitor.candle.id';
 const KEY_SEEN_NUDGES = 'wick.nudge.seen.v1';
 const KEY_HANDLED_SPARKS = 'wick.spark.handled.v1';
 const SECURE_ONBOARDED = 'wick_onboarded_v1';
@@ -365,8 +384,6 @@ function WickRoot() {
   );
   useEffect(() => {
     friendsRef.current = friends;
-    writeNativeFriendWidgetSnapshot(buildFriendWidgetPayload(selectWidgetFriend(friends)));
-    reloadNativeWidgets();
   }, [friends]);
   useEffect(() => {
     snapshotRef.current = snapshot;
@@ -473,6 +490,7 @@ function WickRoot() {
         void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(res.snapshot)).catch(() => {});
         const ownerLabel = settingsRef.current.candleName?.trim() || 'Friend';
         void cloudKitService.syncOwnCandleIfNeeded(ownerLabel, res.snapshot, Date.now()).catch(() => {});
+        publishMyCandleToFriends(res.snapshot, ownerLabel);
         return res.snapshot;
       });
 
@@ -971,6 +989,10 @@ function WickRoot() {
           });
           setActiveTab('circle');
           showToast('Friend paired via iCloud!');
+          const pairedSnap = snapshotRef.current;
+          if (pairedSnap) {
+            publishMyCandleToFriends(pairedSnap, settingsRef.current.candleName?.trim() || 'Wick');
+          }
           if (!settingsRef.current.candleName?.trim()) {
             pendingInviteAfterNameRef.current = false;
             setCandleNameDraft('');
@@ -1076,6 +1098,10 @@ function WickRoot() {
         void syncPendingSparkRescues();
         void syncIncomingNudges();
         void syncIncomingSparks();
+        const resumedSnap = snapshotRef.current;
+        if (resumedSnap) {
+          publishMyCandleToFriends(resumedSnap, settingsRef.current.candleName?.trim() || 'Wick');
+        }
         void cloudKitService
           .refreshFriendCandles()
           .then(applyFilteredFriends)
@@ -1083,6 +1109,10 @@ function WickRoot() {
       }
     });
     void syncIncomingSparks();
+    const snapForFriends = snapshotRef.current;
+    if (snapForFriends) {
+      publishMyCandleToFriends(snapForFriends, settingsRef.current.candleName?.trim() || 'Wick');
+    }
     void cloudKitService
       .refreshFriendCandles()
       .then(applyFilteredFriends)
@@ -1092,6 +1122,10 @@ function WickRoot() {
       void syncPendingSparkRescues();
       void syncIncomingNudges();
       void syncIncomingSparks();
+      const polledSnap = snapshotRef.current;
+      if (polledSnap) {
+        publishMyCandleToFriends(polledSnap, settingsRef.current.candleName?.trim() || 'Wick');
+      }
       void cloudKitService
         .refreshFriendCandles()
         .then(applyFilteredFriends)
@@ -1411,6 +1445,7 @@ function WickRoot() {
         void cloudKitService
           .syncOwnCandleIfNeeded(partial.candleName.trim(), snapshot, Date.now(), true)
           .catch(() => {});
+        publishMyCandleToFriends(snapshot, partial.candleName.trim());
       }
       return next;
     });
@@ -1525,35 +1560,26 @@ function WickRoot() {
   };
 
   const handleNudgeFriend = async (friend: FriendCandle) => {
-    const ownerName = friendOwnerName(friend.id);
-    if (!ownerName) {
-      showToast('Pair again with an iCloud invite before nudging this friend.');
-      return;
+    try {
+      await Share.share({
+        message: nudgeShareMessage(friend),
+      });
+    } catch {
+      showToast('Could not open the text.');
     }
-    const nowMs = trustedNowRef.current;
-    const cooldowns = readNudgeCooldowns(kvGet(KEY_NUDGE_COOLDOWN));
-    if (!canSendNudge(cooldowns[friend.id] ?? null, nowMs)) {
-      showToast(`You already nudged ${friend.displayName}. Try again in a few minutes.`);
-      return;
-    }
-    const sent = await sendNativeNudge({
-      ownerName,
-      nudgeId: `nudge_${nowMs}`,
-      fromName: settingsRef.current.candleName?.trim() || 'A friend',
-      message: nudgeBody(friend),
-      createdAt: nowMs,
-    });
-    if (!sent) {
-      showToast('Sign in to iCloud and pair both ways before a nudge can arrive.');
-      return;
-    }
-    kvSet(KEY_NUDGE_COOLDOWN, JSON.stringify(withNudgeCooldown(cooldowns, friend.id, nowMs)));
-    showToast(`Nudge sent to ${friend.displayName}.`);
   };
 
   const handleSendSpark = async () => {
     if (!canAskForSpark(snapshotRef.current?.state ?? snapshot.state)) {
       showToast('Ask for Spark when your flame is flickering, an ember, smoking, or out.');
+      return;
+    }
+    if (!sparkAskUsesRescue(friendsRef.current.length)) {
+      try {
+        await Share.share({ message: sparkAskText() });
+      } catch {
+        showToast('Could not open the text.');
+      }
       return;
     }
     const senderName = settingsRef.current.candleName?.trim() || 'Your friend';
@@ -1625,6 +1651,7 @@ function WickRoot() {
       return;
     }
     await cloudKitService.syncOwnCandleIfNeeded(effectiveName, snapshot, Date.now(), true).catch(() => {});
+    publishMyCandleToFriends(snapshot, effectiveName);
     const ckShareUrl = await cloudKitService
       .inviteFriendToLockScreen({
         displayName: effectiveName,

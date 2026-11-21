@@ -28,6 +28,17 @@ public class WickNativeModule: Module {
   private lazy var container = CKContainer(identifier: containerId)
   private lazy var zoneID = CKRecordZone.ID(zoneName: zoneName, ownerName: CKCurrentUserDefaultName)
 
+  private func candlePayload(_ record: CKRecord, id: String) -> [String: Any] {
+    [
+      "id": id,
+      "displayName": (record["displayName"] as? String) ?? "Friend",
+      "state": (record["state"] as? String) ?? "STEADY",
+      "flameIntensity": (record["flameIntensity"] as? Double) ?? 0.6,
+      "streakDays": (record["streakDays"] as? Int) ?? 0,
+      "updatedAt": (record["updatedAt"] as? Double) ?? 0,
+    ]
+  }
+
   public func definition() -> ModuleDefinition {
     Name("WickNative")
 
@@ -160,41 +171,93 @@ public class WickNativeModule: Module {
 
     AsyncFunction("fetchSharedFriendCandles") { (promise: Promise) in
       let sharedDB = self.container.sharedCloudDatabase
+      let privateDB = self.container.privateCloudDatabase
       let sub = CKDatabaseSubscription(subscriptionID: "wick-shared-circle-sub")
       let notifInfo = CKSubscription.NotificationInfo()
       notifInfo.shouldSendContentAvailable = true
       sub.notificationInfo = notifInfo
       sharedDB.save(sub) { _, _ in }
 
+      let results = LockedBox<[[String: Any]]>([])
+      let group = DispatchGroup()
+
+      group.enter()
       sharedDB.fetchAllRecordZones { zones, error in
-        if let error {
-          promise.reject("CK_ZONES_ERR", error.localizedDescription)
+        guard error == nil, let zones, !zones.isEmpty else {
+          group.leave()
           return
         }
-        guard let zones, !zones.isEmpty else {
-          promise.resolve([])
-          return
-        }
-        let results = LockedBox<[[String: Any]]>([])
-        let zoneIDs = zones.map { $0.zoneID }
-        let fetchOp = CKFetchRecordZoneChangesOperation(recordZoneIDs: zoneIDs, configurationsByRecordZoneID: nil)
+        let fetchOp = CKFetchRecordZoneChangesOperation(recordZoneIDs: zones.map { $0.zoneID }, configurationsByRecordZoneID: nil)
         fetchOp.recordWasChangedBlock = { recID, res in
-          if case .success(let record) = res, record.recordType == self.recordType {
-            let item: [String: Any] = [
-              "id": "\(recID.zoneID.ownerName):\(recID.recordName)",
-              "displayName": (record["displayName"] as? String) ?? "Friend",
-              "state": (record["state"] as? String) ?? "STEADY",
-              "flameIntensity": (record["flameIntensity"] as? Double) ?? 0.6,
-              "streakDays": (record["streakDays"] as? Int) ?? 0,
-              "updatedAt": (record["updatedAt"] as? Double) ?? 0,
-            ]
-            results.withLock { $0.append(item) }
+          if case .success(let record) = res,
+             record.recordType == self.recordType,
+             !recID.recordName.hasPrefix("visitor_") {
+            results.withLock { $0.append(self.candlePayload(record, id: "\(recID.zoneID.ownerName):\(recID.recordName)")) }
           }
         }
         fetchOp.fetchRecordZoneChangesResultBlock = { _ in
-          promise.resolve(results.withLock { $0 })
+          group.leave()
         }
         sharedDB.add(fetchOp)
+      }
+
+      group.enter()
+      let privateFetch = CKFetchRecordZoneChangesOperation(recordZoneIDs: [self.zoneID], configurationsByRecordZoneID: nil)
+      privateFetch.recordWasChangedBlock = { recID, res in
+        if case .success(let record) = res,
+           record.recordType == self.recordType,
+           recID.recordName.hasPrefix("visitor_") {
+          results.withLock { $0.append(self.candlePayload(record, id: "\(recID.zoneID.ownerName):\(recID.recordName)")) }
+        }
+      }
+      privateFetch.fetchRecordZoneChangesResultBlock = { _ in
+        group.leave()
+      }
+      privateDB.add(privateFetch)
+
+      group.notify(queue: .main) {
+        promise.resolve(results.withLock { $0 })
+      }
+    }
+
+    AsyncFunction("publishVisitorCandle") {
+      (visitorId: String, displayName: String, state: String, flameIntensity: Double, streakDays: Int, updatedAt: Double, promise: Promise) in
+      let trimmed = visitorId.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !trimmed.isEmpty else {
+        promise.resolve(false)
+        return
+      }
+      let recordName = "visitor_\(trimmed)"
+      let sharedDB = self.container.sharedCloudDatabase
+      sharedDB.fetchAllRecordZones { zones, error in
+        guard error == nil, let zones, !zones.isEmpty else {
+          promise.resolve(false)
+          return
+        }
+        let group = DispatchGroup()
+        let wrote = LockedBox(false)
+        for zone in zones {
+          group.enter()
+          let recID = CKRecord.ID(recordName: recordName, zoneID: zone.zoneID)
+          sharedDB.fetch(withRecordID: recID) { existing, _ in
+            let record = existing ?? CKRecord(recordType: self.recordType, recordID: recID)
+            let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+            record["displayName"] = (name.isEmpty ? "Wick" : name) as CKRecordValue
+            record["state"] = state as CKRecordValue
+            record["flameIntensity"] = flameIntensity as CKRecordValue
+            record["streakDays"] = streakDays as CKRecordValue
+            record["updatedAt"] = updatedAt as CKRecordValue
+            sharedDB.save(record) { _, saveError in
+              if saveError == nil {
+                wrote.withLock { $0 = true }
+              }
+              group.leave()
+            }
+          }
+        }
+        group.notify(queue: .main) {
+          promise.resolve(wrote.withLock { $0 })
+        }
       }
     }
 

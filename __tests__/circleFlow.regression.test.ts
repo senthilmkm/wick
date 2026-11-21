@@ -1,19 +1,22 @@
 import {
-  buildFriendWidgetPayload,
   canAskForSpark,
   canSendNudge,
   classifySparkRescue,
   friendListChanged,
   friendOwnerName,
   isForgeablePairLink,
+  isVisitorCandleName,
   NUDGE_COOLDOWN_MS,
   nudgeBody,
+  nudgeShareMessage,
   parseSparkShareCreate,
   pickIncomingSpark,
   readIdList,
   readNudgeCooldowns,
   rememberId,
-  selectWidgetFriend,
+  sparkAskText,
+  sparkAskUsesRescue,
+  visitorRecordName,
   withNudgeCooldown,
 } from '../src/engine/circleFlow';
 import { FriendCandle } from '../src/types/wick';
@@ -56,24 +59,32 @@ describe('circle pairing, nudge, and spark regression', () => {
     expect(nudgeBody({ state: 'SMOKING_GRACE', streakDays: 4 })).toBe(
       'Your Wick candle is smoking grace. A short walk keeps your 4-day streak glowing.'
     );
+    expect(
+      nudgeShareMessage({ displayName: 'Maya', state: 'SMOKING_GRACE', streakDays: 4 })
+    ).toBe(
+      'Maya, your Wick candle is smoking grace. A short walk keeps your 4-day streak glowing.'
+    );
+    expect(nudgeShareMessage({ displayName: '  ', state: 'BLAZING', streakDays: 1 })).toContain('Friend, ');
+    expect(sparkAskUsesRescue(0)).toBe(false);
+    expect(sparkAskUsesRescue(Number.NaN)).toBe(false);
+    expect(sparkAskUsesRescue(1)).toBe(true);
+    expect(sparkAskText()).toContain('500 steps');
+    expect(visitorRecordName('  abc  ')).toBe('visitor_abc');
+    expect(visitorRecordName('   ')).toBeNull();
+    expect(isVisitorCandleName('visitor_abc')).toBe(true);
+    expect(isVisitorCandleName('visitor_')).toBe(false);
+    expect(isVisitorCandleName('myCandleStatus')).toBe(false);
     expect(friendOwnerName('owner-name:myCandleStatus')).toBe('owner-name');
     expect(friendOwnerName('local-only')).toBeNull();
     expect(friendOwnerName(':missing')).toBeNull();
     expect(friendOwnerName('   :record')).toBeNull();
   });
 
-  it('publishes the newest paired friend to the lock screen widget', () => {
-    expect(selectWidgetFriend([])).toBeNull();
-    expect(buildFriendWidgetPayload(null)).toBe('');
+  it('keeps a paired friend off the lock screen payload and on the Circle list', () => {
     const older = friend('a:one', 10);
     const newer = friend('b:two', 20, 'BLAZING');
-    expect(selectWidgetFriend([older, newer])?.id).toBe('b:two');
-    expect(JSON.parse(buildFriendWidgetPayload(newer))).toEqual({
-      displayName: 'b:two',
-      state: 'BLAZING',
-      flameIntensity: 0.4,
-      streakDays: 3,
-    });
+    expect(friendListChanged([older], [newer])).toBe(true);
+    expect(isVisitorCandleName(visitorRecordName('maya-1') ?? '')).toBe(true);
   });
 
   it('applies a completed Spark only when the candle can burn, and keeps it while night or a dome is active', () => {

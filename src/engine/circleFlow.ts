@@ -58,6 +58,34 @@ export function nudgeBody(friend: Pick<FriendCandle, 'state' | 'streakDays'>): s
   return `Your Wick candle is ${stateLabel}. A short walk keeps your ${friend.streakDays}-day streak glowing.`;
 }
 
+export function nudgeShareMessage(
+  friend: Pick<FriendCandle, 'displayName' | 'state' | 'streakDays'>
+): string {
+  const name = friend.displayName.trim() || 'Friend';
+  const body = nudgeBody(friend);
+  return `${name}, ${body.charAt(0).toLowerCase()}${body.slice(1)}`;
+}
+
+export function sparkAskUsesRescue(friendCount: number): boolean {
+  return Number.isFinite(friendCount) && friendCount > 0;
+}
+
+export function sparkAskText(): string {
+  return 'My Wick is burning low. Walk 500 steps and open Wick to help reignite it.';
+}
+
+export function visitorRecordName(visitorId: string): string | null {
+  const trimmed = visitorId.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return `visitor_${trimmed}`;
+}
+
+export function isVisitorCandleName(recordName: string): boolean {
+  return recordName.startsWith('visitor_') && recordName.length > 'visitor_'.length;
+}
+
 export function friendOwnerName(friendId: string): string | null {
   const splitAt = friendId.indexOf(':');
   if (splitAt <= 0) {
@@ -65,25 +93,6 @@ export function friendOwnerName(friendId: string): string | null {
   }
   const owner = friendId.slice(0, splitAt).trim();
   return owner.length > 0 ? owner : null;
-}
-
-export function selectWidgetFriend(friends: readonly FriendCandle[]): FriendCandle | null {
-  if (friends.length === 0) {
-    return null;
-  }
-  return [...friends].sort((a, b) => b.updatedAt - a.updatedAt)[0];
-}
-
-export function buildFriendWidgetPayload(friend: FriendCandle | null): string {
-  if (!friend) {
-    return '';
-  }
-  return JSON.stringify({
-    displayName: friend.displayName,
-    state: friend.state,
-    flameIntensity: friend.flameIntensity,
-    streakDays: friend.streakDays,
-  });
 }
 
 export function friendListChanged(
