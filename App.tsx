@@ -87,7 +87,7 @@ import {
 } from './src/services/notificationService';
 import { playMatchStrikeSound } from './src/services/soundService';
 import { createDefaultShareCardDriver, ShareCardService } from './src/services/shareCardService';
-import { DEFAULT_SETTINGS, LocalStorageService } from './src/services/storageService';
+import { DEFAULT_SETTINGS, KEY_WAX_LAYERS, LocalStorageService } from './src/services/storageService';
 import { subscribeToTiltAngle } from './src/services/tiltService';
 import {
   ActiveSparkRescue,
@@ -137,6 +137,7 @@ const SECURE_ONBOARDED = 'wick_onboarded_v1';
 const SECURE_SETTINGS = 'wick_settings_v1';
 const SECURE_SNAPSHOT = 'wick_snapshot_v1';
 const SECURE_PRO = 'wick_pro_v1';
+const SECURE_WAX_LAYERS = 'wick_wax_layers_v1';
 const REVENUECAT_IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY;
 
 const storageService = new LocalStorageService(
@@ -370,6 +371,10 @@ function WickRoot() {
         if (res.completedDayLayer) {
           const nextLayers = storageService.appendWaxLayer(res.completedDayLayer);
           setWaxLayers(nextLayers);
+          void SecureStore.setItemAsync(
+            SECURE_WAX_LAYERS,
+            JSON.stringify(nextLayers.slice(-20))
+          ).catch(() => {});
         }
         storageService.saveSnapshot(res.snapshot, Date.now());
         void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(res.snapshot)).catch(() => {});
@@ -468,6 +473,7 @@ function WickRoot() {
         secSettings,
         secSnapshot,
         secPro,
+        secWaxLayers,
       ] = await Promise.all([
         storageService.ensureFirstInstallRecorded(now.getTime()),
         storageService.isStarterDomeClaimed(),
@@ -478,6 +484,7 @@ function WickRoot() {
         SecureStore.getItemAsync(SECURE_SETTINGS).catch(() => null),
         SecureStore.getItemAsync(SECURE_SNAPSHOT).catch(() => null),
         SecureStore.getItemAsync(SECURE_PRO).catch(() => null),
+        SecureStore.getItemAsync(SECURE_WAX_LAYERS).catch(() => null),
       ]);
       if (!mounted) {
         return;
@@ -503,6 +510,17 @@ function WickRoot() {
           const parsedSnap = JSON.parse(secSnapshot) as CandleSnapshot;
           setSnapshot(parsedSnap);
           storageService.saveSnapshot(parsedSnap, now.getTime());
+        } catch {
+          // ignore corrupt fallback
+        }
+      }
+      if (secWaxLayers) {
+        try {
+          const parsedLayers = JSON.parse(secWaxLayers) as WaxLayer[];
+          if (Array.isArray(parsedLayers) && parsedLayers.length > storageService.loadWaxLayers().length) {
+            kvSet(KEY_WAX_LAYERS, JSON.stringify(parsedLayers));
+            setWaxLayers(parsedLayers);
+          }
         } catch {
           // ignore corrupt fallback
         }
@@ -1339,6 +1357,7 @@ function WickRoot() {
       SecureStore.deleteItemAsync(SECURE_ONBOARDED),
       SecureStore.deleteItemAsync(SECURE_SETTINGS),
       SecureStore.deleteItemAsync(SECURE_SNAPSHOT),
+      SecureStore.deleteItemAsync(SECURE_WAX_LAYERS),
     ]);
     const now = new Date();
     const freshSnapshot = createMorningSnapshot(getLocalDateKey(now), now.getTime(), 0, 0, 1);
@@ -1382,6 +1401,10 @@ function WickRoot() {
     if (res.completedDayLayer) {
       const nextLayers = storageService.appendWaxLayer(res.completedDayLayer);
       setWaxLayers(nextLayers);
+      void SecureStore.setItemAsync(
+        SECURE_WAX_LAYERS,
+        JSON.stringify(nextLayers.slice(-20))
+      ).catch(() => {});
     }
   };
 
