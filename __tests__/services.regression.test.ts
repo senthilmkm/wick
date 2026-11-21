@@ -332,8 +332,9 @@ describe('themes, storage, motion, audio, export & CloudKit regression tests', (
     signedIn = true;
     expect(await ck.syncOwnCandleIfNeeded('Alex', snap, 1000)).toBe(true);
     expect(await ck.syncOwnCandleIfNeeded('Alex', snap, 2000)).toBe(false);
-    expect(await ck.syncOwnCandleIfNeeded('Alex', snap, 1000 + 15 * 60 * 1000)).toBe(true);
-    expect(upserts).toBe(2);
+    expect(await ck.syncOwnCandleIfNeeded('Alex', snap, 2500, true)).toBe(true);
+    expect(await ck.syncOwnCandleIfNeeded('Alex', snap, 2500 + 15 * 60 * 1000)).toBe(true);
+    expect(upserts).toBe(3);
     expect(await ck.inviteFriendToLockScreen()).toBe('https://icloud.com/share/wick-1');
     expect(await ck.refreshFriendCandles()).toHaveLength(1);
   });

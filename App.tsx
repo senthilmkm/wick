@@ -5,7 +5,7 @@ import * as Print from 'expo-print';
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Linking, Modal, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { AppState, Linking, Modal, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { MMKV } from 'react-native-mmkv';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -215,6 +215,10 @@ function WickRoot() {
   const [tiltAngle, setTiltAngle] = useState(0);
   const [proPriceLabel, setProPriceLabel] = useState<string | null>(null);
   const [showMoodModal, setShowMoodModal] = useState(false);
+  const [showCandleNameModal, setShowCandleNameModal] = useState(false);
+  const [candleNameDraft, setCandleNameDraft] = useState('');
+  const [candleNameError, setCandleNameError] = useState<string | null>(null);
+  const pendingInviteAfterNameRef = useRef(false);
   const prevCandleStateRef = useRef<CandleSnapshot['state'] | null>(null);
   const [isAppActive, setIsAppActive] = useState(true);
   const previousBrightnessRef = useRef<number | null>(null);
@@ -586,6 +590,12 @@ function WickRoot() {
           });
           setActiveTab('circle');
           showToast('Friend paired via iCloud!');
+          if (!settingsRef.current.candleName?.trim()) {
+            pendingInviteAfterNameRef.current = false;
+            setCandleNameDraft('');
+            setCandleNameError(null);
+            setShowCandleNameModal(true);
+          }
         });
         return;
       }
@@ -622,6 +632,12 @@ function WickRoot() {
         });
         setActiveTab('circle');
         showToast(`${displayName} paired to your Circle!`);
+        if (!settingsRef.current.candleName?.trim()) {
+          pendingInviteAfterNameRef.current = false;
+          setCandleNameDraft('');
+          setCandleNameError(null);
+          setShowCandleNameModal(true);
+        }
         return;
       }
 
@@ -1013,6 +1029,11 @@ function WickRoot() {
       ) {
         void scheduleMorningWakeNotification(next);
       }
+      if (partial.candleName !== undefined && partial.candleName.trim().length > 0) {
+        void cloudKitService
+          .syncOwnCandleIfNeeded(partial.candleName.trim(), snapshot, Date.now(), true)
+          .catch(() => {});
+      }
       return next;
     });
   };
@@ -1167,18 +1188,27 @@ function WickRoot() {
     }
   };
 
-  const handleInviteFriend = async () => {
+  const handleInviteFriend = async (nameOverride?: string) => {
     if (!canAddFriend(entitlement, friends.length, Date.now())) {
       setPaywallReason('friend');
       return;
     }
+    const effectiveName = (nameOverride ?? settingsRef.current.candleName ?? '').trim();
+    if (!effectiveName) {
+      pendingInviteAfterNameRef.current = true;
+      setCandleNameDraft('');
+      setCandleNameError(null);
+      setShowCandleNameModal(true);
+      return;
+    }
+    await cloudKitService.syncOwnCandleIfNeeded(effectiveName, snapshot, Date.now(), true).catch(() => {});
     const ckShareUrl = await cloudKitService.inviteFriendToLockScreen().catch(() => null);
     const pairUrl =
       ckShareUrl && ckShareUrl.length > 0
         ? ckShareUrl
         : `https://senthilmkm.github.io/wick/pair.html?id=${encodeURIComponent(
             `usr_${Date.now()}`
-          )}&name=${encodeURIComponent('Friend')}&streak=${snapshot.streakDays}`;
+          )}&name=${encodeURIComponent(effectiveName)}&streak=${snapshot.streakDays}`;
     try {
       await Share.share({
         title: 'Pair our Wick Candles',
@@ -1188,6 +1218,24 @@ function WickRoot() {
       showToast('Circle invite link shared.');
     } catch {
       showToast('Could not open Share Sheet.');
+    }
+  };
+
+  const handleSaveCandleNameModal = () => {
+    const trimmed = candleNameDraft.trim().slice(0, 12);
+    if (!trimmed) {
+      setCandleNameError('Please enter a name (1–12 characters) so your friends can recognize you.');
+      return;
+    }
+    setCandleNameError(null);
+    handleUpdateSettings({ candleName: trimmed });
+    setShowCandleNameModal(false);
+    const shouldResumeInvite = pendingInviteAfterNameRef.current;
+    pendingInviteAfterNameRef.current = false;
+    if (shouldResumeInvite) {
+      void handleInviteFriend(trimmed);
+    } else {
+      showToast(`Candle named "${trimmed}" — friends will see this name.`);
     }
   };
 
@@ -1554,6 +1602,65 @@ function WickRoot() {
         </View>
       </Modal>
 
+      <Modal
+        visible={showCandleNameModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          pendingInviteAfterNameRef.current = false;
+          setShowCandleNameModal(false);
+        }}
+      >
+        <View style={styles.moodBackdrop}>
+          <View style={styles.moodSheet}>
+            <Text style={styles.moodTitle}>Name Your Candle</Text>
+            <Text style={styles.moodSub}>
+              Before pairing, add your name so friends see who you are instead of &quot;Friend&quot;.
+            </Text>
+            <View style={styles.nameInfoBox}>
+              <Text style={styles.nameInfoTitle}>Where this name is shown:</Text>
+              <Text style={styles.nameInfoItem}>
+                • In your friend&apos;s Circle list and Nudge / Spark Rescue alerts
+              </Text>
+              <Text style={styles.nameInfoItem}>
+                • Engraved on your own Candle &amp; Wax Ledger header
+              </Text>
+            </View>
+            <TextInput
+              style={styles.nameInput}
+              value={candleNameDraft}
+              onChangeText={(t) => {
+                setCandleNameDraft(t.slice(0, 12));
+                if (candleNameError) {
+                  setCandleNameError(null);
+                }
+              }}
+              placeholder="Your name (e.g. Senthil)"
+              placeholderTextColor="#71717A"
+              maxLength={12}
+              autoFocus
+              returnKeyType="done"
+              onSubmitEditing={handleSaveCandleNameModal}
+            />
+            {candleNameError && <Text style={styles.nameErrorText}>{candleNameError}</Text>}
+            <Pressable style={styles.nameSaveBtn} onPress={handleSaveCandleNameModal}>
+              <Text style={styles.nameSaveBtnText}>
+                {pendingInviteAfterNameRef.current ? 'Save & Share Pair Link' : 'Save Candle Name'}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={styles.moodSkipBtn}
+              onPress={() => {
+                pendingInviteAfterNameRef.current = false;
+                setShowCandleNameModal(false);
+              }}
+            >
+              <Text style={styles.moodSkipText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       {(tabsVisible || activeTab !== 'flame') && (
         <View style={[styles.tabBarWrap, { bottom: Math.max(20, insets.bottom + 8) }]}>
           <BlurView intensity={40} tint="dark" style={styles.tabBar}>
@@ -1677,4 +1784,31 @@ const styles = StyleSheet.create({
   moodChipText: { color: '#F5F5F7', fontSize: 14, fontWeight: '600' },
   moodSkipBtn: { alignItems: 'center', paddingVertical: 8 },
   moodSkipText: { color: '#A1A1AA', fontSize: 14 },
+  nameInfoBox: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 12,
+    gap: 4,
+  },
+  nameInfoTitle: { color: '#E4E4E7', fontSize: 12, fontWeight: '700', marginBottom: 2 },
+  nameInfoItem: { color: '#A1A1AA', fontSize: 12, lineHeight: 17 },
+  nameInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 159, 67, 0.35)',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: '#F5F5F7',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  nameErrorText: { color: '#FCA5A5', fontSize: 12, fontWeight: '600' },
+  nameSaveBtn: {
+    backgroundColor: '#FF9F43',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  nameSaveBtnText: { color: '#0A0A0C', fontSize: 15, fontWeight: '700' },
 });

@@ -26,7 +26,8 @@ export class CloudKitCircleService {
   async syncOwnCandleIfNeeded(
     displayName: string,
     snapshot: CandleSnapshot,
-    nowMs: number
+    nowMs: number,
+    force = false
   ): Promise<boolean> {
     const signedIn = await this.driver.isICloudSignedIn();
     if (!signedIn) {
@@ -35,7 +36,7 @@ export class CloudKitCircleService {
 
     const stateChanged = this.lastPublishedState !== snapshot.state;
     const fifteenMinutesElapsed = nowMs - this.lastPublishedAt >= 15 * 60 * 1000;
-    if (!stateChanged && !fifteenMinutesElapsed) {
+    if (!force && !stateChanged && !fifteenMinutesElapsed) {
       return false;
     }
 
