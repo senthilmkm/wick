@@ -9,6 +9,7 @@ import {
   vec,
 } from '@shopify/react-native-skia';
 import React, { useMemo, useState } from 'react';
+import { SHARE_CARD_GUIDE_BODY } from '../services/shareCardService';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 interface InfoModalProps {
@@ -106,7 +107,7 @@ const GUIDE_ITEMS = [
   },
   {
     title: '5. Glass Dome (24h Rest Pause)',
-    body: 'Sick or traveling? Spend 300g of earned wax (or an owned Glass Dome) to freeze your candle for 24 hours with zero streak loss.',
+    body: 'Your first Glass Dome is free and pauses the candle for 24 hours. Further domes are part of Wick Pro, paid for with 300g of wax.',
   },
   {
     title: '6. 500-Step Spark Rescue & Circle',
@@ -115,6 +116,10 @@ const GUIDE_ITEMS = [
   {
     title: '7. 100% Local-First Privacy',
     body: 'All Apple Health steps, themes, and streak logs stay privately on your iPhone—no accounts, no cloud health storage.',
+  },
+  {
+    title: '8. Share Card',
+    body: SHARE_CARD_GUIDE_BODY,
   },
 ];
 

@@ -6,6 +6,7 @@ import {
   computeFlameIntensity,
   computePaceRatio,
   deriveWaxLayerSpec,
+  endOfLocalDayMs,
   getFlameColorHex,
   getLocalDateKey,
   getMoodWaxColorHex,
@@ -84,15 +85,25 @@ export function evaluateCandleState(input: StepEvaluationInput): StepEvaluationR
   let current = input.snapshot;
   let completedDayLayer: WaxLayer | null = null;
 
-  // 1. Handle midnight / new-day rollover
-  if (current.dateKey !== currentDateKey) {
-    const survived =
-      current.state !== 'EXTINGUISHED' &&
-      current.state !== 'SMOKING_GRACE' &&
-      (current.ignitedAt !== null || current.state === 'GLASS_DOME');
+  // 1. Handle midnight / new-day rollover. A backward date never mints a day.
+  const dayDelta = daysBetweenDateKeys(current.dateKey, currentDateKey);
+  if (dayDelta < 0) {
+    return {
+      completedDayLayer: null,
+      snapshot: { ...current, updatedAt: nowMs },
+    };
+  }
+  if (dayDelta > 0) {
+    const failed = current.state === 'EXTINGUISHED' || current.state === 'SMOKING_GRACE';
+    const domeActive =
+      current.state === 'GLASS_DOME' ||
+      (current.glassDomeActiveUntil !== null && current.glassDomeActiveUntil > nowMs);
+    const participated = domeActive || current.ignitedAt !== null || current.state === 'NIGHT_SLEEP';
+    const earned =
+      !failed && (domeActive || (current.stepsToday > 0 && (current.ignitedAt !== null || current.state === 'NIGHT_SLEEP')));
 
     const waxSpec = deriveWaxLayerSpec(current.stepsToday, settings.dailyStepGoal);
-    if (survived) {
+    if (earned) {
       completedDayLayer = {
         id: `wax_${current.dateKey}`,
         date: current.dateKey,
@@ -105,9 +116,16 @@ export function evaluateCandleState(input: StepEvaluationInput): StepEvaluationR
       };
     }
 
-    const missedIntermediateDay = daysBetweenDateKeys(current.dateKey, currentDateKey) > 1;
-    const nextStreak = survived && !missedIntermediateDay ? current.streakDays + 1 : 0;
-    const nextWaxGrams = survived ? current.waxGrams + waxSpec.waxGramsEarned : current.waxGrams;
+    const missedIntermediateDay = dayDelta > 1;
+    let nextStreak = 0;
+    if (missedIntermediateDay || failed || !participated) {
+      nextStreak = 0;
+    } else if (earned) {
+      nextStreak = current.streakDays + 1;
+    } else {
+      nextStreak = current.streakDays;
+    }
+    const nextWaxGrams = earned ? current.waxGrams + waxSpec.waxGramsEarned : current.waxGrams;
     current = createMorningSnapshot(
       currentDateKey,
       nowMs,
@@ -217,7 +235,7 @@ export function evaluateCandleState(input: StepEvaluationInput): StepEvaluationR
     };
   }
 
-  // 6. Smoking Grace Period (stays active until bedtime/midnight so evening walks can save the streak)
+  // 6. Smoking grace lasts until local midnight. 350 steps before then reignite it.
   if (current.state === 'SMOKING_GRACE') {
     const startSteps = current.smokingStartSteps ?? safeSteps;
     const burstSteps = Math.max(0, safeSteps - startSteps);
@@ -240,6 +258,25 @@ export function evaluateCandleState(input: StepEvaluationInput): StepEvaluationR
       };
     }
 
+    const graceEnds = endOfLocalDayMs(now);
+    if (nowMs >= graceEnds) {
+      return {
+        completedDayLayer,
+        snapshot: {
+          ...current,
+          state: 'EXTINGUISHED',
+          stepsToday: safeSteps,
+          expectedStepsNow,
+          paceRatio,
+          flameIntensity: 0,
+          flameColorHex: getFlameColorHex('EXTINGUISHED'),
+          smokingGraceExpiresAt: null,
+          smokingStartSteps: null,
+          updatedAt: nowMs,
+        },
+      };
+    }
+
     return {
       completedDayLayer,
       snapshot: {
@@ -247,6 +284,7 @@ export function evaluateCandleState(input: StepEvaluationInput): StepEvaluationR
         stepsToday: safeSteps,
         expectedStepsNow,
         paceRatio,
+        smokingGraceExpiresAt: graceEnds,
         updatedAt: nowMs,
       },
     };
@@ -269,7 +307,7 @@ export function evaluateCandleState(input: StepEvaluationInput): StepEvaluationR
     nextState = 'DYING_EMBER';
   } else {
     nextState = 'SMOKING_GRACE';
-    smokingGraceExpiresAt = nowMs + SMOKING_GRACE_DURATION_MS;
+    smokingGraceExpiresAt = endOfLocalDayMs(now);
     smokingStartSteps = safeSteps;
   }
 

@@ -23,6 +23,11 @@ export function getLocalDateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+/** Local midnight that ends `date`'s candle day. Smoking grace lasts until this instant. */
+export function endOfLocalDayMs(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1, 0, 0, 0, 0).getTime();
+}
+
 /**
  * Computes the ISO week key (YYYY-Www) in local time for weekly quota tracking.
  */
@@ -266,6 +271,7 @@ export interface WeeklyRecapBand {
   dateKey: string;
   colorHex: string;
   lit: boolean;
+  steps: number;
 }
 
 export interface WeeklyRecapSummary {
@@ -313,7 +319,7 @@ export function buildWeeklyRecapSummary(
       if (todayMood) {
         moodCounts.set(todayMood, (moodCounts.get(todayMood) ?? 0) + 1);
       }
-      bands.push({ dateKey: key, colorHex, lit });
+      bands.push({ dateKey: key, colorHex, lit, steps: Math.max(0, todaySteps) });
     } else {
       const layer = layerMap.get(key);
       if (layer) {
@@ -322,9 +328,9 @@ export function buildWeeklyRecapSummary(
         if (layer.mood) {
           moodCounts.set(layer.mood, (moodCounts.get(layer.mood) ?? 0) + 1);
         }
-        bands.push({ dateKey: key, colorHex: layer.colorHex, lit: true });
+        bands.push({ dateKey: key, colorHex: layer.colorHex, lit: true, steps: layer.stepsAchieved });
       } else {
-        bands.push({ dateKey: key, colorHex: '#27272A', lit: false });
+        bands.push({ dateKey: key, colorHex: '#27272A', lit: false, steps: 0 });
       }
     }
   }

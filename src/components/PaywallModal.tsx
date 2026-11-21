@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FREE_CARD_USED_TITLE } from '../services/shareCardService';
 import { EntitlementState } from '../types/wick';
 
 const PRIVACY_URL = 'https://senthilmkm.github.io/wick/privacy.html';
@@ -22,7 +23,7 @@ interface PaywallModalProps {
 const REASON_TITLES: Record<PaywallReason, string> = {
   theme: 'Unlock All 6 Moody Themes',
   friend: 'Unlock Unlimited Circle Friends',
-  video: 'Weekly Free Export Used',
+  video: FREE_CARD_USED_TITLE,
   pdf: 'Unlock PDF Wax Ledger Reports',
   ledger: 'Unlock Full Day 100+ Wax History',
   dome: 'Unlock Glass Domes (24h Pause)',
@@ -50,7 +51,7 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
     ? 'Processing...'
     : priceLabel
       ? `Unlock Wick Pro • ${priceLabel}`
-      : 'Unlock Wick Pro Forever';
+      : 'Price unavailable — try again';
 
   const handleAction = async (fn: () => void | Promise<void>) => {
     if (busy) {
@@ -72,9 +73,10 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
           <Text style={styles.badge}>WICK PRO • LIFETIME</Text>
           <Text style={styles.title}>{REASON_TITLES[reason]}</Text>
           <Text style={styles.body}>
-            One-time purchase to unlock all 6 background themes, unlimited Multiplayer Lock Screen
-            Widgets, unlimited daily streak shares, PDF Wax Ledger exports, full streak history, and
-            Glass Domes forever.
+            One-time purchase. Unlocks all 6 background themes, unlimited Circle friends, unlimited
+            daily and weekly shares, PDF Wax Ledger exports, full streak history, and extra Glass
+            Domes. The solo candle, Obsidian Night, one Circle friend, seven ledger days, your
+            first Glass Dome, and one PNG share card each week stay free.
           </Text>
 
           <Pressable

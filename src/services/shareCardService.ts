@@ -4,6 +4,23 @@ import RNShare from 'react-native-share';
 import { CANDLE_MOOD_COLORS, WeeklyRecapSummary } from '../engine/candleMath';
 import { CandleMood, CandleState, WickTheme } from '../types/wick';
 
+export const DAILY_SHARE_BUTTON_TITLE = 'Share Card';
+export const WEEK_CARD_BUTTON_TITLE = 'Week Card';
+export const SHARE_WEEK_CARD_BUTTON_TITLE = 'Share Week Card';
+export const FREE_CARD_USED_TITLE = 'Your Free Card Is Used';
+export const SHARE_CARD_GUIDE_BODY =
+  'Share makes a PNG card. One is free per week, and Wick Pro removes that limit.';
+
+const CARD_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+export function formatCardDate(dateKey: string): string {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  if (!year || !month || !day || month < 1 || month > 12) {
+    return dateKey;
+  }
+  return `${CARD_MONTHS[month - 1]} ${day}, ${year}`;
+}
+
 export interface DailyShareCardInput {
   candleName?: string;
   streakDays: number;
@@ -14,6 +31,8 @@ export interface DailyShareCardInput {
   flameColorHex: string;
   waxGrams: number;
   theme: WickTheme;
+  dateKey?: string;
+  mood?: CandleMood;
 }
 
 export interface WeeklyShareCardInput {
@@ -37,10 +56,12 @@ export interface ShareCardDriver {
 export function formatDailyShareMessage(input: DailyShareCardInput): string {
   const name = input.candleName?.trim();
   const prefix = name ? `${name} • ` : '';
+  const datePart = input.dateKey ? `${formatCardDate(input.dateKey)} • ` : '';
   const stateLabel = input.state.toLowerCase().replace(/_/g, ' ');
-  return `${prefix}Day ${input.streakDays} • My wick is ${stateLabel} (${input.stepsToday.toLocaleString(
+  const moodPart = input.mood ? ` • Mood: ${input.mood}` : '';
+  return `${prefix}${datePart}Day ${input.streakDays} • My wick is ${stateLabel} (${input.stepsToday.toLocaleString(
     'en-US'
-  )} / ${input.dailyStepGoal.toLocaleString('en-US')} steps today) — Keep your wick lit!`;
+  )} / ${input.dailyStepGoal.toLocaleString('en-US')} steps today)${moodPart} — Keep your wick lit!`;
 }
 
 export function formatWeeklyShareMessage(input: WeeklyShareCardInput): string {
@@ -109,6 +130,10 @@ export function renderDailyCardDataUri(input: DailyShareCardInput): string | nul
     const headerLabel = (input.candleName?.trim() || 'WICK').toUpperCase();
     canvas.drawText(headerLabel, 120, 155, accentPaint, titleFont);
     canvas.drawText(`DAY ${input.streakDays} STREAK`, 120, 210, mutedPaint, metaFont);
+    if (input.dateKey) {
+      const moodBit = input.mood ? `Mood  ${input.mood}` : 'Mood  —';
+      canvas.drawText(`${formatCardDate(input.dateKey)}  •  ${moodBit}`, 120, 258, mutedPaint, metaFont);
+    }
 
     // Ambient flame glow + rendered candle centerpiece
     const lit = input.flameIntensity > 0;
@@ -230,7 +255,7 @@ export function renderWeeklyCardDataUri(input: WeeklyShareCardInput): string | n
       labelPaint.setAntiAlias(true);
       labelPaint.setColor(Skia.Color(band.lit ? '#0A0A0C' : '#A1A1AA'));
       canvas.drawText(
-        `${band.dateKey}   •   ${band.lit ? 'Lit' : 'Unlit'}`,
+        `${band.dateKey}   •   ${band.lit ? 'Lit' : 'Unlit'}   •   ${band.steps.toLocaleString('en-US')} steps`,
         152,
         y + 49,
         labelPaint,

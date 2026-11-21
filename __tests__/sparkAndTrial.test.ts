@@ -18,10 +18,14 @@ import {
   createInitialEntitlement,
   FREE_MAX_LEDGER_DAYS,
   getVisibleLedgerLimit,
+  creditShareQuota,
+  formatFreeShareCardsLabel,
+  freeShareCardsRemaining,
   hasProAccess,
   isInReverseTrial,
   recordVideoExport,
   REVERSE_TRIAL_MS,
+  SHARE_QUOTA_WINDOW_MS,
 } from '../src/engine/trialGuard';
 
 describe('sparkEngine', () => {
@@ -107,17 +111,26 @@ describe('trialGuard & anti-reinstall protection', () => {
     const afterDay3 = new Date(day1.getTime() + REVERSE_TRIAL_MS + 1000);
     const nextWeekAfterDay3 = new Date(afterDay3.getTime() + 8 * 24 * 60 * 60 * 1000);
     expect(canExportVideo(freeEnt, afterDay3)).toBe(true);
+    expect(freeShareCardsRemaining(freeEnt, afterDay3.getTime())).toBe(1);
+    expect(formatFreeShareCardsLabel(freeEnt, afterDay3.getTime())).toBe('1 free left');
     const afterExport = recordVideoExport(freeEnt, afterDay3);
     expect(canExportVideo(afterExport, afterDay3)).toBe(false);
-    // Resets in new week
-    expect(canExportVideo(afterExport, nextWeekAfterDay3)).toBe(true);
-    const newWeekExport = recordVideoExport(afterExport, nextWeekAfterDay3);
+    expect(formatFreeShareCardsLabel(afterExport, afterDay3.getTime())).toBe('0 free left');
+    // A later calendar date alone does not refill the free share.
+    expect(canExportVideo(afterExport, nextWeekAfterDay3)).toBe(false);
+    const credited = creditShareQuota(afterExport, SHARE_QUOTA_WINDOW_MS);
+    expect(canExportVideo(credited, nextWeekAfterDay3)).toBe(true);
+    expect(formatFreeShareCardsLabel(credited, nextWeekAfterDay3.getTime())).toBe('1 free left');
+    const newWeekExport = recordVideoExport(credited, nextWeekAfterDay3);
     expect(newWeekExport.freeVideoExportsThisWeek).toBe(1);
+    expect(newWeekExport.quotaElapsedMs).toBe(0);
 
     const proEnt = createInitialEntitlement(day1, true, false, 1000, true);
     expect(canUseTheme(proEnt, 'midnight_hearth')).toBe(true);
     expect(canAddFriend(proEnt, 10)).toBe(true);
     expect(canExportVideo(proEnt, day1)).toBe(true);
+    expect(freeShareCardsRemaining(proEnt, day1.getTime())).toBeNull();
+    expect(formatFreeShareCardsLabel(proEnt, day1.getTime())).toBe('Unlimited');
     expect(canExportPdf(proEnt)).toBe(true);
     expect(getVisibleLedgerLimit(proEnt)).toBe(Number.MAX_SAFE_INTEGER);
 

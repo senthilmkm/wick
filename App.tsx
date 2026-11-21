@@ -29,6 +29,7 @@ import {
   getLocalDateKey,
   getLocalWeekKey,
   isNighttimeWindow,
+  WeeklyRecapSummary,
 } from './src/engine/candleMath';
 import {
   activateGlassDome,
@@ -40,27 +41,27 @@ import {
   triggerNightBlowOut,
 } from './src/engine/candleStateMachine';
 import {
-  buildSparkUniversalLink,
-  createSparkToken,
-  parseSparkLink,
   SPARK_EXPIRY_MS,
-  SPARK_SHARED_APP_SECRET,
   SPARK_STEPS_REQUIRED,
-  startSparkRescue,
   updateSparkRescueProgress,
-  validateSparkToken,
 } from './src/engine/sparkEngine';
 import {
   canAddFriend,
   canExportPdf,
   canExportVideo,
-  canOfferFreeTrial,
   canUseGlassDome,
   canUseTheme,
+  capFriendList,
+  creditShareQuota,
+  formatFreeShareCardsLabel,
+  getVisibleLedgerLimit,
   hasProAccess,
   isInReverseTrial,
+  latchTrialExpiry,
   recordVideoExport,
 } from './src/engine/trialGuard';
+import { buildOnboardingSettings, finishOnboardingSnapshot } from './src/engine/onboardingFlow';
+import { earlierInstallStamp, proFromStoreStatus, resolveAuthoritativeNow } from './src/engine/trustedClock';
 import { CircleScreen } from './src/screens/CircleScreen';
 import { FlameScreen } from './src/screens/FlameScreen';
 import { OnboardingScreen } from './src/screens/OnboardingScreen';
@@ -68,11 +69,11 @@ import { SanctuaryScreen } from './src/screens/SanctuaryScreen';
 import { WaxLedgerScreen } from './src/screens/WaxLedgerScreen';
 import { AudioBlowDetector, computeWindShakeIntensity } from './src/services/audioBlowService';
 import {
-  checkProEntitlement,
   fetchProPriceLabel,
   initBilling,
   purchaseProPackage,
-  restoreProPurchases,
+  resolveProEntitlement,
+  restoreProEntitlement,
 } from './src/services/billingService';
 import { CloudKitCircleService } from './src/services/cloudKitService';
 import {
@@ -86,6 +87,10 @@ import {
   completeNativeSparkShare,
   createNativeCloudKitDriver,
   createNativeSparkShareUrl,
+  fetchNativeSleepFocus,
+  fetchNativeTrialAnchor,
+  markNativeTrialAnchorExpired,
+  peekNativeShareUrlKind,
   reloadNativeWidgets,
   writeNativeWidgetSnapshot,
 } from './src/services/nativeCloudBridge';
@@ -151,6 +156,12 @@ const SECURE_SETTINGS = 'wick_settings_v1';
 const SECURE_SNAPSHOT = 'wick_snapshot_v1';
 const SECURE_PRO = 'wick_pro_v1';
 const SECURE_WAX_LAYERS = 'wick_wax_layers_v1';
+const SECURE_TRUSTED_NOW = 'wick_last_trusted_now';
+const SECURE_TRIAL_EXPIRED = 'wick_trial_expired_v1';
+const SECURE_PRO_VERIFIED = 'wick_pro_verified_at';
+const SECURE_TRIAL_NOTICE = 'wick_trial_end_notice_v1';
+const SECURE_SERVER_ANCHOR = 'wick_server_trial_anchor';
+const SECURE_SHARE_QUOTA = 'wick_share_quota_v2';
 const REVENUECAT_IOS_KEY = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY;
 
 const storageService = new LocalStorageService(
@@ -226,6 +237,8 @@ function WickRoot() {
   const [tabsVisible, setTabsVisible] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [paywallReason, setPaywallReason] = useState<PaywallReason | null>(null);
+  const [showTrialEnded, setShowTrialEnded] = useState(false);
+  const [accessReady, setAccessReady] = useState(false);
   const [resumeTick, setResumeTick] = useState(0);
   const [windIntensity, setWindIntensity] = useState(0);
   const [tiltAngle, setTiltAngle] = useState(0);
@@ -271,13 +284,20 @@ function WickRoot() {
   const hkBaselineStepsRef = useRef<number>(0);
   const pedometerSessionOffsetRef = useRef<number>(0);
   const [entitlement, setEntitlement] = useState<EntitlementState>(() => ({
-    isPro: kvGet(KEY_PRO_CACHE) === '1',
-    isEligibleForIntroTrial: true,
+    isPro: false,
+    isEligibleForIntroTrial: false,
     starterDomeClaimed: false,
-    firstInstallAt: Date.now(),
+    firstInstallAt: 0,
+    trialExpired: true,
+    quotaElapsedMs: 0,
     freeVideoExportsThisWeek: 0,
     weekKey: getLocalWeekKey(new Date()),
   }));
+  const trustedNowRef = useRef(Date.now());
+  const [trustedNowMs, setTrustedNowMs] = useState(() => Date.now());
+  const accessReadyRef = useRef(false);
+  const sleepFocusRef = useRef(false);
+  const trialNoticeShownRef = useRef(false);
 
   const [snapshot, setSnapshot] = useState<CandleSnapshot>(() => {
     const saved = storageService.loadSnapshot();
@@ -287,7 +307,12 @@ function WickRoot() {
     return createMorningSnapshot(getLocalDateKey(new Date()), Date.now(), 0, 0, 1);
   });
 
-  const effectiveThemeId = canUseTheme(entitlement, settings.themeId, Date.now())
+  const allowProNow = accessReady && hasProAccess(entitlement, trustedNowMs);
+  const effectiveThemeId = canUseTheme(
+    { ...entitlement, isPro: allowProNow, trialExpired: accessReady ? entitlement.trialExpired : true },
+    settings.themeId,
+    trustedNowMs
+  )
     ? settings.themeId
     : 'obsidian_night';
   const theme = getThemeById(effectiveThemeId);
@@ -298,6 +323,22 @@ function WickRoot() {
   useEffect(() => {
     entitlementRef.current = entitlement;
   }, [entitlement]);
+  useEffect(() => {
+    accessReadyRef.current = accessReady;
+  }, [accessReady]);
+
+  const syncTrusted = useCallback((ms: number) => {
+    trustedNowRef.current = ms;
+    setTrustedNowMs(ms);
+  }, []);
+
+  const trustedDate = useCallback(() => new Date(trustedNowRef.current), []);
+
+  const gatesAllow = useCallback(
+    (nowMs = trustedNowRef.current) =>
+      accessReadyRef.current && hasProAccess(entitlementRef.current, nowMs),
+    []
+  );
   useEffect(() => {
     friendsRef.current = friends;
   }, [friends]);
@@ -360,7 +401,7 @@ function WickRoot() {
 
   const applyStepTotal = useCallback(
     (steps: number) => {
-      const now = new Date();
+      const now = trustedDate();
       const todayKey = getLocalDateKey(now);
       setSnapshot((prev) => {
         const monotonicSteps =
@@ -371,6 +412,7 @@ function WickRoot() {
           stepsToday: monotonicSteps,
           settings: settingsRef.current,
           now,
+          isSleepFocusActive: sleepFocusRef.current,
         });
         const crossedGoalToday =
           (prev.dateKey !== todayKey || prev.stepsToday < activeGoal) &&
@@ -424,7 +466,7 @@ function WickRoot() {
         return updated;
       });
     },
-    [showToast]
+    [showToast, trustedDate]
   );
 
   const syncPendingSparkRescues = useCallback(async () => {
@@ -433,12 +475,14 @@ function WickRoot() {
     }
     checkingSparkRescuesRef.current = true;
     try {
-      const completedRescues = await checkNativePendingSparkRescues();
+      const completedRescues = (await checkNativePendingSparkRescues()).filter(
+        (rescue) => rescue.stepsWalked >= SPARK_STEPS_REQUIRED
+      );
       if (completedRescues.length === 0) {
         return;
       }
-      const totalRescuerSteps = completedRescues.reduce((sum, r) => sum + (r.stepsWalked || 500), 0);
-      const nowMs = Date.now();
+      const totalRescuerSteps = completedRescues.reduce((sum, r) => sum + r.stepsWalked, 0);
+      const nowMs = trustedNowRef.current;
       setSnapshot((prev) => {
         if (prev.state === 'NIGHT_SLEEP' || prev.state === 'GLASS_DOME') {
           return prev;
@@ -462,112 +506,263 @@ function WickRoot() {
     if (steps === null) {
       return;
     }
-    const todayKey = getLocalDateKey(new Date());
+    const todayKey = getLocalDateKey(trustedDate());
     if (snapshotDateKeyRef.current !== todayKey || steps >= hkBaselineStepsRef.current) {
       hkBaselineStepsRef.current = steps;
       pedometerSessionOffsetRef.current = 0;
     }
     applyStepTotal(Math.max(steps, hkBaselineStepsRef.current));
-  }, [applyStepTotal]);
+  }, [applyStepTotal, trustedDate]);
 
   // Initialize Keychain anti-abuse state, durable onboarding/settings fallback, and billing on mount
   useEffect(() => {
     let mounted = true;
     initBilling(REVENUECAT_IOS_KEY);
     (async () => {
-      const now = new Date();
-      const weekKey = getLocalWeekKey(now);
-      const [
-        firstInstall,
-        domeClaimed,
-        quota,
-        remotePro,
-        dynamicPrice,
-        secOnboarded,
-        secSettings,
-        secSnapshot,
-        secPro,
-        secWaxLayers,
-      ] = await Promise.all([
-        storageService.ensureFirstInstallRecorded(now.getTime()),
-        storageService.isStarterDomeClaimed(),
-        storageService.loadVideoExportQuota(weekKey),
-        checkProEntitlement(REVENUECAT_IOS_KEY),
-        fetchProPriceLabel(REVENUECAT_IOS_KEY),
-        SecureStore.getItemAsync(SECURE_ONBOARDED).catch(() => null),
-        SecureStore.getItemAsync(SECURE_SETTINGS).catch(() => null),
-        SecureStore.getItemAsync(SECURE_SNAPSHOT).catch(() => null),
-        SecureStore.getItemAsync(SECURE_PRO).catch(() => null),
-        SecureStore.getItemAsync(SECURE_WAX_LAYERS).catch(() => null),
-      ]);
-      if (!mounted) {
-        return;
-      }
-      if (dynamicPrice) {
-        setProPriceLabel(dynamicPrice);
-      }
-      if (secOnboarded === '1') {
-        kvSet(KEY_ONBOARDED, '1');
-        setOnboarded(true);
-      }
-      if (secSettings) {
-        try {
-          const parsed = { ...DEFAULT_SETTINGS, ...JSON.parse(secSettings) } as UserSettings;
-          setSettings(parsed);
-          storageService.saveSettings(parsed);
-        } catch {
-          // ignore corrupt fallback
+      try {
+        const wallNow = Date.now();
+        const [
+          localInstall,
+          domeClaimed,
+          legacyQuota,
+          proStatus,
+          dynamicPrice,
+          secOnboarded,
+          secSettings,
+          secSnapshot,
+          secPro,
+          secWaxLayers,
+          savedTrusted,
+          savedExpired,
+          savedVerified,
+          savedNotice,
+          savedServerAnchor,
+          savedQuota,
+          liveAnchor,
+        ] = await Promise.all([
+          storageService.ensureFirstInstallRecorded(wallNow),
+          storageService.isStarterDomeClaimed(),
+          storageService.loadVideoExportQuota(getLocalWeekKey(new Date(wallNow))),
+          resolveProEntitlement(REVENUECAT_IOS_KEY),
+          fetchProPriceLabel(REVENUECAT_IOS_KEY),
+          SecureStore.getItemAsync(SECURE_ONBOARDED).catch(() => null),
+          SecureStore.getItemAsync(SECURE_SETTINGS).catch(() => null),
+          SecureStore.getItemAsync(SECURE_SNAPSHOT).catch(() => null),
+          SecureStore.getItemAsync(SECURE_PRO).catch(() => null),
+          SecureStore.getItemAsync(SECURE_WAX_LAYERS).catch(() => null),
+          SecureStore.getItemAsync(SECURE_TRUSTED_NOW).catch(() => null),
+          SecureStore.getItemAsync(SECURE_TRIAL_EXPIRED).catch(() => null),
+          SecureStore.getItemAsync(SECURE_PRO_VERIFIED).catch(() => null),
+          SecureStore.getItemAsync(SECURE_TRIAL_NOTICE).catch(() => null),
+          SecureStore.getItemAsync(SECURE_SERVER_ANCHOR).catch(() => null),
+          SecureStore.getItemAsync(SECURE_SHARE_QUOTA).catch(() => null),
+          fetchNativeTrialAnchor(),
+        ]);
+        if (!mounted) {
+          return;
         }
-      }
-      if (secSnapshot) {
-        try {
-          const parsedSnap = JSON.parse(secSnapshot) as CandleSnapshot;
-          setSnapshot(parsedSnap);
-          storageService.saveSnapshot(parsedSnap, now.getTime());
-        } catch {
-          // ignore corrupt fallback
+        const serverCreated =
+          liveAnchor?.createdAtMs ??
+          (savedServerAnchor && Number(savedServerAnchor) > 0 ? Number(savedServerAnchor) : null);
+        const lastTrusted = savedTrusted && Number(savedTrusted) > 0 ? Number(savedTrusted) : null;
+        const clock = resolveAuthoritativeNow(wallNow, lastTrusted, liveAnchor?.serverNowMs ?? null);
+        syncTrusted(clock.trustedNowMs);
+        await SecureStore.setItemAsync(SECURE_TRUSTED_NOW, String(clock.trustedNowMs)).catch(() => {});
+        if (liveAnchor?.createdAtMs) {
+          await SecureStore.setItemAsync(SECURE_SERVER_ANCHOR, String(liveAnchor.createdAtMs)).catch(
+            () => {}
+          );
         }
-      }
-      if (secWaxLayers) {
-        try {
-          const parsedLayers = JSON.parse(secWaxLayers) as WaxLayer[];
-          if (Array.isArray(parsedLayers) && parsedLayers.length > storageService.loadWaxLayers().length) {
-            kvSet(KEY_WAX_LAYERS, JSON.stringify(parsedLayers));
-            setWaxLayers(parsedLayers);
+        const installAt = earlierInstallStamp(localInstall, serverCreated);
+        if (installAt !== null) {
+          await storageService.setFirstInstallAt(installAt);
+        }
+
+        let quotaElapsed = 0;
+        let quotaCount = legacyQuota.count;
+        if (savedQuota) {
+          try {
+            const parsed = JSON.parse(savedQuota) as { elapsedMs?: number; count?: number };
+            quotaElapsed = Math.max(0, Number(parsed.elapsedMs) || 0);
+            quotaCount = Math.max(0, Number(parsed.count) || 0);
+          } catch {
+            quotaElapsed = 0;
           }
-        } catch {
-          // ignore corrupt fallback
+        }
+        quotaElapsed += clock.forwardCreditMs;
+
+        const verifiedAt = savedVerified ? Number(savedVerified) : null;
+        const cachedGrant = secPro === '1' || kvGet(KEY_PRO_CACHE) === '1';
+        const isProUser = proFromStoreStatus(
+          proStatus,
+          cachedGrant,
+          Number.isFinite(verifiedAt) ? verifiedAt : null,
+          clock.trustedNowMs
+        );
+        if (isProUser) {
+          kvSet(KEY_PRO_CACHE, '1');
+          await SecureStore.setItemAsync(SECURE_PRO, '1').catch(() => {});
+          if (proStatus === 'active') {
+            await SecureStore.setItemAsync(SECURE_PRO_VERIFIED, String(clock.trustedNowMs)).catch(() => {});
+          }
+        } else {
+          kvSet(KEY_PRO_CACHE, '0');
+          await SecureStore.deleteItemAsync(SECURE_PRO).catch(() => {});
+          await SecureStore.deleteItemAsync(SECURE_PRO_VERIFIED).catch(() => {});
+        }
+
+        let nextEnt: EntitlementState = latchTrialExpiry(
+          {
+            isPro: isProUser,
+            isEligibleForIntroTrial: false,
+            starterDomeClaimed: domeClaimed,
+            firstInstallAt: installAt ?? 0,
+            trialExpired: savedExpired === '1' || liveAnchor?.expired === true || installAt === null,
+            quotaElapsedMs: quotaElapsed,
+            freeVideoExportsThisWeek: quotaCount,
+            weekKey: getLocalWeekKey(new Date(clock.trustedNowMs)),
+          },
+          clock.trustedNowMs,
+          clock.clockRolledBack && liveAnchor?.serverNowMs == null
+        );
+        nextEnt = {
+          ...nextEnt,
+          isEligibleForIntroTrial: isInReverseTrial(nextEnt, clock.trustedNowMs),
+        };
+        if (nextEnt.trialExpired) {
+          await SecureStore.setItemAsync(SECURE_TRIAL_EXPIRED, '1').catch(() => {});
+          void markNativeTrialAnchorExpired();
+        }
+        await SecureStore.setItemAsync(
+          SECURE_SHARE_QUOTA,
+          JSON.stringify({
+            elapsedMs: nextEnt.quotaElapsedMs ?? 0,
+            count: nextEnt.freeVideoExportsThisWeek,
+          })
+        ).catch(() => {});
+        if (!mounted) {
+          return;
+        }
+        setEntitlement(nextEnt);
+        if (dynamicPrice) {
+          setProPriceLabel(dynamicPrice);
+        }
+        if (secOnboarded === '1') {
+          kvSet(KEY_ONBOARDED, '1');
+          setOnboarded(true);
+        }
+        let loadedSettings = storageService.loadSettings();
+        if (secSettings) {
+          try {
+            loadedSettings = { ...DEFAULT_SETTINGS, ...JSON.parse(secSettings) } as UserSettings;
+          } catch {
+            // ignore corrupt fallback
+          }
+        }
+        const proAccess = nextEnt.isPro || isInReverseTrial(nextEnt, clock.trustedNowMs);
+        if (!proAccess && loadedSettings.themeId !== 'obsidian_night') {
+          loadedSettings = { ...loadedSettings, themeId: 'obsidian_night' };
+        }
+        setSettings(loadedSettings);
+        storageService.saveSettings(loadedSettings);
+        void SecureStore.setItemAsync(SECURE_SETTINGS, JSON.stringify(loadedSettings)).catch(() => {});
+        if (!proAccess) {
+          setFriends((prev) => {
+            const capped = capFriendList(prev, nextEnt, clock.trustedNowMs);
+            kvSet(KEY_FRIENDS, JSON.stringify(capped));
+            return capped;
+          });
+        }
+        if (secSnapshot) {
+          try {
+            const parsedSnap = JSON.parse(secSnapshot) as CandleSnapshot;
+            setSnapshot(parsedSnap);
+            storageService.saveSnapshot(parsedSnap, clock.trustedNowMs);
+          } catch {
+            // ignore corrupt fallback
+          }
+        }
+        if (secWaxLayers) {
+          try {
+            const parsedLayers = JSON.parse(secWaxLayers) as WaxLayer[];
+            if (Array.isArray(parsedLayers) && parsedLayers.length > storageService.loadWaxLayers().length) {
+              kvSet(KEY_WAX_LAYERS, JSON.stringify(parsedLayers));
+              setWaxLayers(parsedLayers);
+            }
+          } catch {
+            // ignore corrupt fallback
+          }
+        }
+        if (savedNotice === '1') {
+          trialNoticeShownRef.current = true;
+        } else if (nextEnt.trialExpired && !nextEnt.isPro) {
+          trialNoticeShownRef.current = true;
+          setShowTrialEnded(true);
+        }
+      } catch {
+        if (mounted) {
+          setEntitlement((prev) => ({
+            ...prev,
+            isPro: false,
+            trialExpired: true,
+            firstInstallAt: 0,
+            isEligibleForIntroTrial: false,
+          }));
+        }
+      } finally {
+        if (mounted) {
+          setAccessReady(true);
+          setHydrated(true);
         }
       }
-      const isProUser = remotePro || secPro === '1';
-      if (isProUser) {
-        kvSet(KEY_PRO_CACHE, '1');
-      }
-      setEntitlement((prev) => ({
-        ...prev,
-        isPro: prev.isPro || isProUser,
-        firstInstallAt: firstInstall,
-        starterDomeClaimed: domeClaimed,
-        isEligibleForIntroTrial: canOfferFreeTrial(true, firstInstall === now.getTime() ? null : firstInstall, domeClaimed),
-        freeVideoExportsThisWeek: quota.count,
-        weekKey: quota.weekKey,
-      }));
-      if (!isProUser && now.getTime() - firstInstall >= 3 * 24 * 60 * 60 * 1000) {
-        setSettings((prevSettings) => {
-          if (prevSettings.themeId === 'obsidian_night') {
-            return prevSettings;
-          }
-          const reverted = { ...prevSettings, themeId: 'obsidian_night' as ThemeId };
-          storageService.saveSettings(reverted);
-          return reverted;
-        });
-      }
-      setHydrated(true);
     })();
     return () => {
       mounted = false;
     };
+  }, [syncTrusted]);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const wall = Date.now();
+      const last = trustedNowRef.current;
+      if (wall > last && wall - last < 2 * 60 * 1000) {
+        trustedNowRef.current = wall;
+        setTrustedNowMs(wall);
+      }
+    }, 30000);
+    return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = () => {
+      const now = new Date(trustedNowRef.current);
+      const scheduleOn =
+        settingsRef.current.sleepFocusSyncEnabled &&
+        isNighttimeWindow(
+          now,
+          settingsRef.current.wakeHour,
+          settingsRef.current.wakeMinute,
+          settingsRef.current.sleepHour,
+          settingsRef.current.sleepMinute
+        );
+      sleepFocusRef.current = settingsRef.current.sleepFocusSyncEnabled && scheduleOn;
+      if (!settingsRef.current.sleepFocusSyncEnabled) {
+        return;
+      }
+      void fetchNativeSleepFocus().then((focused) => {
+        if (!cancelled && settingsRef.current.sleepFocusSyncEnabled) {
+          sleepFocusRef.current = scheduleOn || focused;
+        }
+      });
+    };
+    refresh();
+    const id = setInterval(refresh, 60000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [settings.sleepFocusSyncEnabled, settings.wakeHour, settings.wakeMinute, settings.sleepHour, settings.sleepMinute, trustedNowMs]);
 
   // Handle incoming Spark Rescue & Circle Pair links
   useEffect(() => {
@@ -576,33 +771,45 @@ function WickRoot() {
         return;
       }
       if (url.includes('icloud.com/share')) {
-        void acceptNativeShareUrlWithKind(url).then((res) => {
+        void (async () => {
+          const peek = await peekNativeShareUrlKind(url);
+          const nowMs = trustedNowRef.current;
+          if (
+            peek.kind === 'friend' &&
+            !canAddFriend(entitlementRef.current, friendsRef.current.length, nowMs)
+          ) {
+            setActiveTab('circle');
+            setPaywallReason('friend');
+            return;
+          }
+          const res = await acceptNativeShareUrlWithKind(url);
           if (!res.accepted) {
             return;
           }
           if (res.kind === 'spark' && res.sparkId) {
-            const exp = res.expiresAt && res.expiresAt > 0 ? res.expiresAt : Date.now() + SPARK_EXPIRY_MS;
-            if (Date.now() > exp) {
+            const exp = res.expiresAt && res.expiresAt > 0 ? res.expiresAt : nowMs + SPARK_EXPIRY_MS;
+            if (trustedNowRef.current > exp) {
               showToast('This Spark Request has expired.');
               return;
             }
             const senderName = res.senderName ?? 'Friend';
+            const stepsRequired = Math.max(SPARK_STEPS_REQUIRED, res.stepsRequired ?? SPARK_STEPS_REQUIRED);
             rescueBaselineStepsRef.current = stepsTodayRef.current;
-            rescueBaselineDateKeyRef.current = snapshotDateKeyRef.current || getLocalDateKey(new Date());
+            rescueBaselineDateKeyRef.current = snapshotDateKeyRef.current || getLocalDateKey(trustedDate());
             rescueCarryoverStepsRef.current = 0;
             setActiveRescue({
               sparkId: res.sparkId,
               senderName,
               stepsWalked: 0,
-              stepsRequired: res.stepsRequired ?? SPARK_STEPS_REQUIRED,
+              stepsRequired,
               expiresAt: exp,
               completed: false,
             });
             setActiveTab('circle');
-            showToast(`Walk ${res.stepsRequired ?? SPARK_STEPS_REQUIRED} steps to rescue ${senderName}'s wick!`);
+            showToast(`Walk ${stepsRequired} steps to rescue ${senderName}'s wick!`);
             return;
           }
-          if (!canAddFriend(entitlementRef.current, friendsRef.current.length, Date.now())) {
+          if (!canAddFriend(entitlementRef.current, friendsRef.current.length, trustedNowRef.current)) {
             setActiveTab('circle');
             setPaywallReason('friend');
             return;
@@ -619,7 +826,11 @@ function WickRoot() {
                 } catch {
                   // ignore corrupt removed list
                 }
-                const filtered = remoteFriends.filter((f) => !removedSet.has(f.id));
+                const filtered = capFriendList(
+                  remoteFriends.filter((f) => !removedSet.has(f.id)),
+                  entitlementRef.current,
+                  trustedNowRef.current
+                );
                 setFriends(filtered);
                 kvSet(KEY_FRIENDS, JSON.stringify(filtered));
               }
@@ -640,11 +851,11 @@ function WickRoot() {
             setCandleNameError(null);
             setShowCandleNameModal(true);
           }
-        });
+        })();
         return;
       }
       if (url.includes('circle/pair') || url.includes('pair.html')) {
-        if (!canAddFriend(entitlementRef.current, friendsRef.current.length, Date.now())) {
+        if (!canAddFriend(entitlementRef.current, friendsRef.current.length, trustedNowRef.current)) {
           setActiveTab('circle');
           setPaywallReason('friend');
           return;
@@ -660,17 +871,24 @@ function WickRoot() {
           if (prev.some((f) => f.id === friendId)) {
             return prev;
           }
-          const next: FriendCandle[] = [
-            ...prev,
-            {
-              id: friendId,
-              displayName,
-              state: 'BLAZING',
-              flameIntensity: 0.9,
-              streakDays,
-              updatedAt: Date.now(),
-            },
-          ];
+          if (!canAddFriend(entitlementRef.current, prev.length, trustedNowRef.current)) {
+            return prev;
+          }
+          const next = capFriendList(
+            [
+              ...prev,
+              {
+                id: friendId,
+                displayName,
+                state: 'BLAZING' as const,
+                flameIntensity: 0.9,
+                streakDays,
+                updatedAt: trustedNowRef.current,
+              },
+            ],
+            entitlementRef.current,
+            trustedNowRef.current
+          );
           kvSet(KEY_FRIENDS, JSON.stringify(next));
           return next;
         });
@@ -685,21 +903,9 @@ function WickRoot() {
         return;
       }
 
-      const token = parseSparkLink(url);
-      if (!token) {
-        return;
+      if (url.includes('spark.html') || url.includes('wick://spark')) {
+        showToast('Ask your friend to resend the Spark from Wick.');
       }
-      const check = validateSparkToken(token, SPARK_SHARED_APP_SECRET, Date.now(), new Set());
-      if (!check.valid) {
-        showToast(check.reason ?? 'Invalid Spark Request.');
-        return;
-      }
-      rescueBaselineStepsRef.current = stepsTodayRef.current;
-      rescueBaselineDateKeyRef.current = snapshotDateKeyRef.current || getLocalDateKey(new Date());
-      rescueCarryoverStepsRef.current = 0;
-      setActiveRescue(startSparkRescue(token));
-      setActiveTab('circle');
-      showToast(`Walk 500 steps to rescue ${token.senderName}'s wick!`);
     };
 
     void Linking.getInitialURL().then(handleIncomingUrl);
@@ -748,7 +954,11 @@ function WickRoot() {
       } catch {
         // ignore corrupt removed list
       }
-      const filtered = remoteFriends.filter((f) => !removedSet.has(f.id));
+      const filtered = capFriendList(
+        remoteFriends.filter((f) => !removedSet.has(f.id)),
+        entitlementRef.current,
+        trustedNowRef.current
+      );
       setFriends(filtered);
       kvSet(KEY_FRIENDS, JSON.stringify(filtered));
     };
@@ -757,6 +967,25 @@ function WickRoot() {
       const activeNow = state === 'active';
       setIsAppActive(activeNow);
       if (activeNow) {
+        const clock = resolveAuthoritativeNow(Date.now(), trustedNowRef.current, null);
+        syncTrusted(clock.trustedNowMs);
+        void SecureStore.setItemAsync(SECURE_TRUSTED_NOW, String(clock.trustedNowMs)).catch(() => {});
+        if (clock.forwardCreditMs > 0 || clock.clockRolledBack) {
+          setEntitlement((prev) => {
+            const credited = creditShareQuota(prev, clock.forwardCreditMs);
+            const latched = latchTrialExpiry(credited, clock.trustedNowMs, clock.clockRolledBack);
+            if (latched.trialExpired && !prev.trialExpired) {
+              void SecureStore.setItemAsync(SECURE_TRIAL_EXPIRED, '1').catch(() => {});
+              void markNativeTrialAnchorExpired();
+              if (!latched.isPro && !trialNoticeShownRef.current) {
+                trialNoticeShownRef.current = true;
+                setShowTrialEnded(true);
+              }
+            }
+            persistShareQuota(latched);
+            return latched;
+          });
+        }
         setResumeTick((t) => t + 1);
         void syncHealthKit();
         void syncPendingSparkRescues();
@@ -1032,7 +1261,11 @@ function WickRoot() {
           } catch {
             // ignore corrupt removed list
           }
-          const filtered = remoteFriends.filter((f) => !removedSet.has(f.id));
+          const filtered = capFriendList(
+            remoteFriends.filter((f) => !removedSet.has(f.id)),
+            entitlementRef.current,
+            trustedNowRef.current
+          );
           setFriends(filtered);
           kvSet(KEY_FRIENDS, JSON.stringify(filtered));
         }
@@ -1204,7 +1437,7 @@ function WickRoot() {
 
   const handleSendSpark = async () => {
     const senderName = settingsRef.current.candleName?.trim() || 'Your friend';
-    const nowMs = Date.now();
+    const nowMs = trustedNowRef.current;
     const sparkId = `spark_${nowMs}`;
     const expiresAt = nowMs + SPARK_EXPIRY_MS;
     const ckSparkUrl = await createNativeSparkShareUrl(
@@ -1213,27 +1446,49 @@ function WickRoot() {
       SPARK_STEPS_REQUIRED,
       expiresAt
     );
-    const token = createSparkToken(
-      sparkId,
-      senderName,
-      'local_ios',
-      SPARK_SHARED_APP_SECRET,
-      nowMs
-    );
-    const url = ckSparkUrl ?? buildSparkUniversalLink(token);
+    if (!ckSparkUrl) {
+      showToast('Sign in to iCloud to send a Spark your friend can complete.');
+      return;
+    }
     try {
       await Share.share({
         title: 'Save my Wick!',
-        message: `My wick is running low! Walk 500 steps to reignite my candle: ${url}`,
-        url,
+        message: `My wick is running low! Walk 500 steps to reignite my candle: ${ckSparkUrl}`,
+        url: ckSparkUrl,
       });
     } catch {
       showToast('Could not open Share Sheet.');
     }
   };
 
+  const persistShareQuota = (ent: EntitlementState) => {
+    void SecureStore.setItemAsync(
+      SECURE_SHARE_QUOTA,
+      JSON.stringify({
+        elapsedMs: ent.quotaElapsedMs ?? 0,
+        count: ent.freeVideoExportsThisWeek,
+      })
+    ).catch(() => {});
+  };
+
+  const grantPro = (persist: boolean) => {
+    if (persist) {
+      kvSet(KEY_PRO_CACHE, '1');
+      void SecureStore.setItemAsync(SECURE_PRO, '1').catch(() => {});
+      void SecureStore.setItemAsync(SECURE_PRO_VERIFIED, String(trustedNowRef.current)).catch(() => {});
+    }
+    setEntitlement((e) => ({ ...e, isPro: true, isEligibleForIntroTrial: false }));
+  };
+
+  const clearProGrant = () => {
+    kvSet(KEY_PRO_CACHE, '0');
+    void SecureStore.deleteItemAsync(SECURE_PRO).catch(() => {});
+    void SecureStore.deleteItemAsync(SECURE_PRO_VERIFIED).catch(() => {});
+    setEntitlement((e) => ({ ...e, isPro: false }));
+  };
+
   const handleInviteFriend = async (nameOverride?: string) => {
-    if (!canAddFriend(entitlement, friends.length, Date.now())) {
+    if (!canAddFriend(entitlement, friends.length, trustedNowRef.current)) {
       setPaywallReason('friend');
       return;
     }
@@ -1287,8 +1542,8 @@ function WickRoot() {
     if (sharingCandleRef.current) {
       return;
     }
-    const now = new Date();
-    if (!canExportVideo(entitlement, now)) {
+    const now = trustedDate();
+    if (!canExportVideo(entitlementRef.current, now)) {
       setPaywallReason('video');
       return;
     }
@@ -1304,10 +1559,13 @@ function WickRoot() {
         flameColorHex: snapshot.flameColorHex,
         waxGrams: snapshot.waxGrams,
         theme,
+        dateKey: snapshot.dateKey,
+        mood: snapshot.mood,
       });
       if (outcome === 'shared') {
         const updated = recordVideoExport(entitlementRef.current, now);
         setEntitlement(updated);
+        persistShareQuota(updated);
         await storageService.saveVideoExportQuota(updated.weekKey, updated.freeVideoExportsThisWeek);
       }
     } catch {
@@ -1321,7 +1579,7 @@ function WickRoot() {
     if (exportingPdfRef.current) {
       return;
     }
-    if (!canExportPdf(entitlement, Date.now())) {
+    if (!canExportPdf(entitlementRef.current, trustedNowRef.current)) {
       setPaywallReason('pdf');
       return;
     }
@@ -1351,6 +1609,28 @@ function WickRoot() {
     }
   };
 
+  const handleShareWeek = async (recap: WeeklyRecapSummary) => {
+    const now = trustedDate();
+    if (!canExportVideo(entitlementRef.current, now)) {
+      setPaywallReason('video');
+      return;
+    }
+    const themeId = canUseTheme(entitlementRef.current, settingsRef.current.themeId, now.getTime())
+      ? settingsRef.current.themeId
+      : 'obsidian_night';
+    const outcome = await shareCardService.shareWeeklyCard({
+      candleName: settingsRef.current.candleName,
+      recap,
+      theme: getThemeById(themeId),
+    });
+    if (outcome === 'shared') {
+      const updated = recordVideoExport(entitlementRef.current, now);
+      setEntitlement(updated);
+      persistShareQuota(updated);
+      await storageService.saveVideoExportQuota(updated.weekKey, updated.freeVideoExportsThisWeek);
+    }
+  };
+
   if (!hydrated) {
     return <View style={[styles.flex, { backgroundColor: '#0A0A0C' }]} />;
   }
@@ -1362,17 +1642,29 @@ function WickRoot() {
         <OnboardingScreen
           initialGoal={settings.dailyStepGoal}
           initialCandleName={settings.candleName}
-          onComplete={(goal, candleName) => {
-            const nextPatch: Partial<UserSettings> = {
-              dailyStepGoal: goal,
-              ...(candleName ? { candleName } : {}),
-            };
-            handleUpdateSettings(nextPatch);
+          initialThemeId={settings.themeId}
+          initialWakeHour={settings.wakeHour}
+          initialWakeMinute={settings.wakeMinute}
+          initialSleepHour={settings.sleepHour}
+          initialSleepMinute={settings.sleepMinute}
+          onComplete={(completion) => {
+            const patch = buildOnboardingSettings(completion);
+            handleUpdateSettings(patch);
             kvSet(KEY_ONBOARDED, '1');
             void SecureStore.setItemAsync(SECURE_ONBOARDED, '1').catch(() => {});
+            const now = trustedDate();
+            setSnapshot((prev) => {
+              const next = finishOnboardingSnapshot(
+                prev,
+                { ...settingsRef.current, ...patch },
+                now,
+                completion.healthSteps
+              );
+              storageService.saveSnapshot(next, now.getTime());
+              void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(next)).catch(() => {});
+              return next;
+            });
             setOnboarded(true);
-            void scheduleMorningWakeNotification({ ...settings, ...nextPatch });
-            void syncHealthKit();
           }}
         />
       </GestureHandlerRootView>
@@ -1457,6 +1749,11 @@ function WickRoot() {
           resumeTick={resumeTick}
           windIntensity={windIntensity}
           tiltAngle={tiltAngle}
+          maxWaxLayers={getVisibleLedgerLimit({
+            ...entitlement,
+            isPro: allowProNow,
+            trialExpired: accessReady ? entitlement.trialExpired : true,
+          }, trustedNowMs)}
           onStrikeLighter={() => {
             void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
             void playMatchStrikeSound(settings.soundEffectsEnabled, settings.liveBreezeEnabled);
@@ -1468,6 +1765,14 @@ function WickRoot() {
             });
             showToast('Wick lit! Walk to keep the flame blazing.');
           }}
+          shareCardsLabel={formatFreeShareCardsLabel(
+            {
+              ...entitlement,
+              isPro: allowProNow,
+              trialExpired: accessReady ? entitlement.trialExpired : true,
+            },
+            trustedNowMs
+          )}
           onShareVideo={() => {
             void handleShareCandle();
           }}
@@ -1475,17 +1780,21 @@ function WickRoot() {
             void handleSendSpark();
           }}
           onActivateGlassDome={() => {
-            if (!canUseGlassDome(entitlement, Date.now())) {
+            const nowMs = trustedNowRef.current;
+            if (!canUseGlassDome(entitlementRef.current, nowMs, snapshot.glassDomesOwned)) {
               setPaywallReason('dome');
               return;
             }
-            const res = activateGlassDome(snapshot, Date.now());
+            const ownedBefore = snapshot.glassDomesOwned;
+            const res = activateGlassDome(snapshot, nowMs);
             if (res.activated) {
               setSnapshot(res.snapshot);
-              storageService.saveSnapshot(res.snapshot, Date.now());
+              storageService.saveSnapshot(res.snapshot, nowMs);
               void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(res.snapshot));
-              void storageService.markStarterDomeClaimed();
-              setEntitlement((e) => ({ ...e, starterDomeClaimed: true }));
+              if (ownedBefore > res.snapshot.glassDomesOwned && !gatesAllow(nowMs)) {
+                void storageService.markStarterDomeClaimed();
+                setEntitlement((e) => ({ ...e, starterDomeClaimed: true }));
+              }
               showToast('Glass Dome active — flame protected from wind.');
             } else if (res.reason) {
               showToast(res.reason);
@@ -1518,12 +1827,22 @@ function WickRoot() {
           theme={theme}
           entitlement={{
             ...entitlement,
-            isPro: hasProAccess(entitlement, Date.now()),
+            isPro: allowProNow,
+            trialExpired: accessReady ? entitlement.trialExpired : true,
           }}
+          shareCardsLabel={formatFreeShareCardsLabel(
+            {
+              ...entitlement,
+              isPro: allowProNow,
+              trialExpired: accessReady ? entitlement.trialExpired : true,
+            },
+            trustedNowMs
+          )}
           onExportPdf={() => {
             void handleExportPdf();
           }}
           onUpgradePro={() => setPaywallReason('ledger')}
+          onShareWeek={(recap) => handleShareWeek(recap)}
         />
       )}
 
@@ -1555,14 +1874,15 @@ function WickRoot() {
           theme={theme}
           entitlement={{
             ...entitlement,
-            isPro: hasProAccess(entitlement, Date.now()),
+            isPro: allowProNow,
+            trialExpired: accessReady ? entitlement.trialExpired : true,
           }}
           isPaidPro={entitlement.isPro}
-          isReverseTrialActive={isInReverseTrial(entitlement, Date.now())}
+          isReverseTrialActive={accessReady && isInReverseTrial(entitlement, trustedNowMs)}
           priceLabel={proPriceLabel}
           glassDomesOwned={snapshot.glassDomesOwned}
           onSelectTheme={(themeId: ThemeId) => {
-            if (!canUseTheme(entitlement, themeId, Date.now())) {
+            if (!canUseTheme(entitlementRef.current, themeId, trustedNowRef.current)) {
               setPaywallReason('theme');
               return;
             }
@@ -1571,14 +1891,15 @@ function WickRoot() {
           }}
           onUpdateSettings={handleUpdateSettings}
           onRestorePurchases={() => {
-            void restoreProPurchases(REVENUECAT_IOS_KEY).then((restored) => {
-              if (restored) {
-                kvSet(KEY_PRO_CACHE, '1');
-                void SecureStore.setItemAsync(SECURE_PRO, '1');
-                setEntitlement((e) => ({ ...e, isPro: true, isEligibleForIntroTrial: false }));
+            void restoreProEntitlement(REVENUECAT_IOS_KEY).then((status) => {
+              if (status === 'active') {
+                grantPro(true);
                 showToast('Wick Pro restored!');
-              } else {
+              } else if (status === 'inactive') {
+                clearProGrant();
                 showToast('No previous Wick Pro purchase found.');
+              } else {
+                showToast('Could not reach the App Store. Try again.');
               }
             });
           }}
@@ -1597,33 +1918,88 @@ function WickRoot() {
         </View>
       )}
 
+      <Modal
+        visible={showTrialEnded}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          trialNoticeShownRef.current = true;
+          setShowTrialEnded(false);
+          void SecureStore.setItemAsync(SECURE_TRIAL_NOTICE, '1').catch(() => {});
+        }}
+      >
+        <View style={styles.moodBackdrop}>
+          <View style={styles.moodSheet}>
+            <Text style={styles.moodTitle}>Your 3 days of full access ended</Text>
+            <Text style={styles.moodSub}>
+              The solo candle stays free, with Obsidian Night, one Circle friend, seven days of
+              wax history, and your first Glass Dome. Themes, extra friends, the full ledger, PDF
+              export, and more domes are Wick Pro.
+            </Text>
+            <Pressable
+              style={styles.nameSaveBtn}
+              onPress={() => {
+                trialNoticeShownRef.current = true;
+                setShowTrialEnded(false);
+                void SecureStore.setItemAsync(SECURE_TRIAL_NOTICE, '1').catch(() => {});
+                setPaywallReason('general');
+              }}
+            >
+              <Text style={styles.nameSaveBtnText}>
+                {proPriceLabel ? `Unlock Wick Pro • ${proPriceLabel}` : 'See Wick Pro'}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={styles.moodSkipBtn}
+              onPress={() => {
+                trialNoticeShownRef.current = true;
+                setShowTrialEnded(false);
+                void SecureStore.setItemAsync(SECURE_TRIAL_NOTICE, '1').catch(() => {});
+              }}
+            >
+              <Text style={styles.moodSkipText}>Keep the free candle</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       <PaywallModal
         visible={paywallReason !== null}
         reason={paywallReason ?? 'general'}
         entitlement={entitlement}
         priceLabel={proPriceLabel}
         onStartPro={async () => {
-          const { purchased } = await purchaseProPackage(REVENUECAT_IOS_KEY);
+          let price = proPriceLabel;
+          if (!price) {
+            price = await fetchProPriceLabel(REVENUECAT_IOS_KEY);
+            if (price) {
+              setProPriceLabel(price);
+            }
+          }
+          if (!price && REVENUECAT_IOS_KEY) {
+            showToast('Price unavailable. Check your connection and try again.');
+            return;
+          }
+          const { purchased, sandboxFallback } = await purchaseProPackage(REVENUECAT_IOS_KEY);
           if (purchased) {
-            kvSet(KEY_PRO_CACHE, '1');
-            void SecureStore.setItemAsync(SECURE_PRO, '1').catch(() => {});
-            setEntitlement((e) => ({ ...e, isPro: true, isEligibleForIntroTrial: false }));
+            grantPro(!sandboxFallback);
             setPaywallReason(null);
-            showToast('Welcome to Wick Pro!');
+            showToast(sandboxFallback ? 'Dev Pro unlocked for this session.' : 'Welcome to Wick Pro!');
           } else {
             showToast('Purchase could not be completed.');
           }
         }}
         onRestorePurchases={async () => {
-          const restored = await restoreProPurchases(REVENUECAT_IOS_KEY);
-          setPaywallReason(null);
-          if (restored) {
-            kvSet(KEY_PRO_CACHE, '1');
-            void SecureStore.setItemAsync(SECURE_PRO, '1').catch(() => {});
-            setEntitlement((e) => ({ ...e, isPro: true, isEligibleForIntroTrial: false }));
+          const status = await restoreProEntitlement(REVENUECAT_IOS_KEY);
+          if (status === 'active') {
+            grantPro(true);
+            setPaywallReason(null);
             showToast('Wick Pro restored!');
-          } else {
+          } else if (status === 'inactive') {
+            clearProGrant();
             showToast('No previous Wick Pro purchase found.');
+          } else {
+            showToast('Could not reach the App Store. Try again.');
           }
         }}
         onClose={() => setPaywallReason(null)}

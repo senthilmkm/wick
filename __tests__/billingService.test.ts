@@ -20,6 +20,7 @@ import {
   fetchProPriceLabel,
   initBilling,
   purchaseProPackage,
+  resolveProEntitlement,
   restoreProPurchases,
 } from '../src/services/billingService';
 
@@ -39,10 +40,14 @@ describe('billingService', () => {
 
   it('checks Pro entitlement safely', async () => {
     expect(await checkProEntitlement(undefined)).toBe(false);
+    expect(await resolveProEntitlement(undefined)).toBe('unknown');
     mockGetCustomerInfo.mockResolvedValueOnce({ entitlements: { active: { pro: {} } } });
     expect(await checkProEntitlement('key')).toBe(true);
+    mockGetCustomerInfo.mockResolvedValueOnce({ entitlements: { active: {} } });
+    expect(await resolveProEntitlement('key')).toBe('inactive');
     mockGetCustomerInfo.mockRejectedValueOnce(new Error('err'));
     expect(await checkProEntitlement('key')).toBe(false);
+    expect(await resolveProEntitlement('key')).toBe('unknown');
   });
 
   it('purchases Pro via RevenueCat or dev fallback when key is unset', async () => {
@@ -66,7 +71,18 @@ describe('billingService', () => {
       sandboxFallback: false,
     });
 
-    mockGetOfferings.mockResolvedValueOnce({ current: { availablePackages: [{ id: 'annual' }] } });
+    mockGetOfferings.mockResolvedValueOnce({
+      current: { availablePackages: [{ identifier: 'annual', packageType: 'ANNUAL' }] },
+    });
+    expect(await purchaseProPackage('key')).toEqual({
+      purchased: false,
+      sandboxFallback: false,
+    });
+    expect(mockPurchasePackage).not.toHaveBeenCalled();
+
+    mockGetOfferings.mockResolvedValueOnce({
+      current: { availablePackages: [{ identifier: '$rc_lifetime', packageType: 'LIFETIME' }] },
+    });
     mockPurchasePackage.mockResolvedValueOnce({
       customerInfo: { entitlements: { active: { pro: {} } } },
     });
@@ -93,7 +109,9 @@ describe('billingService', () => {
   it('fetches localized StoreKit price string dynamically without hardcoding', async () => {
     expect(await fetchProPriceLabel(undefined)).toBeNull();
     mockGetOfferings.mockResolvedValueOnce({
-      current: { availablePackages: [{ product: { priceString: '$14.99' } }] },
+      current: {
+        availablePackages: [{ packageType: 'LIFETIME', product: { priceString: '$14.99' } }],
+      },
     });
     expect(await fetchProPriceLabel('key')).toBe('$14.99');
     mockGetOfferings.mockResolvedValueOnce({ current: { availablePackages: [] } });

@@ -207,7 +207,8 @@ describe('themes, storage, motion, audio, export & CloudKit regression tests', (
       DEFAULT_SETTINGS,
       nextDay
     );
-    expect(recovered.dateKey).toBe('2026-11-19');
+    // A timestamp behind the candle day does not roll the date backward.
+    expect(recovered.dateKey).toBe('2026-11-20');
   });
 
   it('detects sustained mic blow-out safely and respects permission denial', async () => {
@@ -403,7 +404,7 @@ describe('themes, storage, motion, audio, export & CloudKit regression tests', (
           totalSteps: 48000,
           daysLit: 7,
           topMood: 'Calm',
-          bands: [{ dateKey: '2026-11-20', colorHex: '#FF9F43', lit: true }],
+          bands: [{ dateKey: '2026-11-20', colorHex: '#FF9F43', lit: true, steps: 8100 }],
         },
         theme,
       })

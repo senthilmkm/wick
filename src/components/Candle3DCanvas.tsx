@@ -37,6 +37,7 @@ interface Candle3DCanvasProps {
   goalMet?: boolean;
   sedentaryDraft?: boolean;
   candleName?: string;
+  maxWaxLayers?: number;
 }
 
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -87,6 +88,7 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
   goalMet = false,
   sedentaryDraft = false,
   candleName,
+  maxWaxLayers = 14,
 }) => {
   const breath = useSharedValue(1);
   const sway = useSharedValue(0);
@@ -327,7 +329,7 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
     { scaleX: 0.92 + breath.value * 0.14 },
   ]);
 
-  const visibleLayers = waxLayers.slice(-14);
+  const visibleLayers = waxLayers.slice(-Math.max(1, maxWaxLayers));
   const glowColor = isNight ? '#7CC6FE' : theme.ambientGlow;
   const outerColor = isNight ? '#38BDF8' : '#FF7A18';
   const midTopColor = isNight ? '#E0F2FE' : goalMet ? '#FFFBE6' : '#FFE8A3';

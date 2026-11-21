@@ -130,16 +130,31 @@ export class LocalStorageService {
     return next;
   }
 
-  async ensureFirstInstallRecorded(nowMs: number): Promise<number> {
-    const existing = await this.secure.getItemAsync(SECURE_FIRST_INSTALL_AT);
-    if (existing !== null) {
-      const parsed = Number(existing);
-      if (Number.isFinite(parsed) && parsed > 0) {
-        return parsed;
+  async ensureFirstInstallRecorded(nowMs: number): Promise<number | null> {
+    try {
+      const existing = await this.secure.getItemAsync(SECURE_FIRST_INSTALL_AT);
+      if (existing !== null) {
+        const parsed = Number(existing);
+        if (Number.isFinite(parsed) && parsed > 0) {
+          return parsed;
+        }
       }
+      await this.secure.setItemAsync(SECURE_FIRST_INSTALL_AT, String(nowMs));
+      return nowMs;
+    } catch {
+      return null;
     }
-    await this.secure.setItemAsync(SECURE_FIRST_INSTALL_AT, String(nowMs));
-    return nowMs;
+  }
+
+  async setFirstInstallAt(ms: number): Promise<void> {
+    if (!Number.isFinite(ms) || ms <= 0) {
+      return;
+    }
+    try {
+      await this.secure.setItemAsync(SECURE_FIRST_INSTALL_AT, String(ms));
+    } catch {
+      // Keychain unavailable: caller must not grant a fresh trial.
+    }
   }
 
   async isStarterDomeClaimed(): Promise<boolean> {

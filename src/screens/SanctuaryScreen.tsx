@@ -13,6 +13,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const SUPPORT_URL = 'https://senthilmkm.github.io/wick/support.html';
+import {
+  formatHourMinute,
+  MAX_DAILY_STEP_GOAL,
+  MIN_DAILY_STEP_GOAL,
+  shiftClockMinutes,
+  TIME_STEP_MINUTES,
+} from '../constants/limits';
 import { THEME_LIST } from '../constants/themes';
 import { canUseTheme } from '../engine/trialGuard';
 import { EntitlementState, ThemeId, UserSettings, WickTheme } from '../types/wick';
@@ -79,7 +86,7 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
                 { backgroundColor: item.canvasTop },
                 selected && { borderColor: item.accent, borderWidth: 2 },
               ]}
-              onPress={() => (unlocked ? onSelectTheme(item.id) : onUpgradePro())}
+              onPress={() => onSelectTheme(item.id)}
             >
               <View style={[styles.glowDot, { backgroundColor: item.ambientGlow }]} />
               <Text style={[styles.themeName, { color: item.primaryText }]}>
@@ -100,7 +107,7 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
               style={styles.stepBtn}
               onPress={() =>
                 onUpdateSettings({
-                  dailyStepGoal: Math.max(2000, settings.dailyStepGoal - 1000),
+                  dailyStepGoal: Math.max(MIN_DAILY_STEP_GOAL, settings.dailyStepGoal - 1000),
                 })
               }
             >
@@ -113,7 +120,7 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
               style={styles.stepBtn}
               onPress={() =>
                 onUpdateSettings({
-                  dailyStepGoal: Math.min(25000, settings.dailyStepGoal + 1000),
+                  dailyStepGoal: Math.min(MAX_DAILY_STEP_GOAL, settings.dailyStepGoal + 1000),
                 })
               }
             >
@@ -127,20 +134,30 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
           <View style={styles.stepperRow}>
             <Pressable
               style={styles.stepBtn}
-              onPress={() =>
-                onUpdateSettings({ wakeHour: (settings.wakeHour + 23) % 24 })
-              }
+              onPress={() => {
+                const next = shiftClockMinutes(
+                  settings.wakeHour,
+                  settings.wakeMinute,
+                  -TIME_STEP_MINUTES
+                );
+                onUpdateSettings({ wakeHour: next.hour, wakeMinute: next.minute });
+              }}
             >
               <Text style={styles.stepBtnText}>-</Text>
             </Pressable>
             <Text style={[styles.goalVal, { color: theme.primaryText }]}>
-              {String(settings.wakeHour).padStart(2, '0')}:00
+              {formatHourMinute(settings.wakeHour, settings.wakeMinute)}
             </Text>
             <Pressable
               style={styles.stepBtn}
-              onPress={() =>
-                onUpdateSettings({ wakeHour: (settings.wakeHour + 1) % 24 })
-              }
+              onPress={() => {
+                const next = shiftClockMinutes(
+                  settings.wakeHour,
+                  settings.wakeMinute,
+                  TIME_STEP_MINUTES
+                );
+                onUpdateSettings({ wakeHour: next.hour, wakeMinute: next.minute });
+              }}
             >
               <Text style={styles.stepBtnText}>+</Text>
             </Pressable>
@@ -152,20 +169,30 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
           <View style={styles.stepperRow}>
             <Pressable
               style={styles.stepBtn}
-              onPress={() =>
-                onUpdateSettings({ sleepHour: (settings.sleepHour + 23) % 24 })
-              }
+              onPress={() => {
+                const next = shiftClockMinutes(
+                  settings.sleepHour,
+                  settings.sleepMinute,
+                  -TIME_STEP_MINUTES
+                );
+                onUpdateSettings({ sleepHour: next.hour, sleepMinute: next.minute });
+              }}
             >
               <Text style={styles.stepBtnText}>-</Text>
             </Pressable>
             <Text style={[styles.goalVal, { color: theme.primaryText }]}>
-              {String(settings.sleepHour).padStart(2, '0')}:00
+              {formatHourMinute(settings.sleepHour, settings.sleepMinute)}
             </Text>
             <Pressable
               style={styles.stepBtn}
-              onPress={() =>
-                onUpdateSettings({ sleepHour: (settings.sleepHour + 1) % 24 })
-              }
+              onPress={() => {
+                const next = shiftClockMinutes(
+                  settings.sleepHour,
+                  settings.sleepMinute,
+                  TIME_STEP_MINUTES
+                );
+                onUpdateSettings({ sleepHour: next.hour, sleepMinute: next.minute });
+              }}
             >
               <Text style={styles.stepBtnText}>+</Text>
             </Pressable>

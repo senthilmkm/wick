@@ -179,6 +179,10 @@ describe('candleMath', () => {
     expect(recap.totalSteps).toBe(18500);
     expect(recap.topMood).toBe('Grateful');
     expect(recap.bands).toHaveLength(7);
+    expect(recap.bands.find((band) => band.dateKey === '2026-11-17')?.steps).toBe(8500);
+    expect(recap.bands.find((band) => band.dateKey === '2026-11-18')?.steps).toBe(6000);
+    expect(recap.bands.find((band) => band.dateKey === '2026-11-19')?.steps).toBe(4000);
+    expect(recap.bands.find((band) => band.dateKey === '2026-11-13')?.steps).toBe(0);
 
     const emptyRecap = buildWeeklyRecapSummary([], 0, 8000, '2026-11-19');
     expect(emptyRecap.daysLit).toBe(0);

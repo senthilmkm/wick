@@ -10,6 +10,7 @@ import {
   SMOKING_GRACE_DURATION_MS,
   triggerNightBlowOut,
 } from '../src/engine/candleStateMachine';
+import { endOfLocalDayMs } from '../src/engine/candleMath';
 import { DEFAULT_SETTINGS } from '../src/services/storageService';
 
 describe('candleStateMachine & regression lifecycle', () => {
@@ -81,7 +82,7 @@ describe('candleStateMachine & regression lifecycle', () => {
 
     const smoking = evaluateCandleState({ snapshot: dying.snapshot, stepsToday: 200, settings, now: midday });
     expect(smoking.snapshot.state).toBe('SMOKING_GRACE');
-    expect(smoking.snapshot.smokingGraceExpiresAt).toBe(midday.getTime() + SMOKING_GRACE_DURATION_MS);
+    expect(smoking.snapshot.smokingGraceExpiresAt).toBe(endOfLocalDayMs(midday));
 
     // Still smoking before 60 min without enough steps
     const stillSmoking = evaluateCandleState({
@@ -176,6 +177,31 @@ describe('candleStateMachine & regression lifecycle', () => {
     });
     expect(unlitRollover.completedDayLayer).toBeNull();
     expect(unlitRollover.snapshot.streakDays).toBe(0);
+
+    // A backward date does not mint a streak day.
+    const backward = evaluateCandleState({
+      snapshot: blownOut,
+      stepsToday: 9000,
+      settings,
+      now: new Date(2026, 10, 17, 12, 0),
+    });
+    expect(backward.completedDayLayer).toBeNull();
+    expect(backward.snapshot.dateKey).toBe('2026-11-18');
+    expect(backward.snapshot.streakDays).toBe(2);
+
+    // Lighting the wick with zero steps does not earn a streak day.
+    const lighterOnly = igniteWithLighter(
+      createMorningSnapshot('2026-11-18', night.getTime(), 4, 20, 0),
+      night.getTime()
+    );
+    const zeroStepRollover = evaluateCandleState({
+      snapshot: lighterOnly,
+      stepsToday: 0,
+      settings,
+      now: nextMorning,
+    });
+    expect(zeroStepRollover.completedDayLayer).toBeNull();
+    expect(zeroStepRollover.snapshot.streakDays).toBe(4);
 
     // SMOKING_GRACE with null smokingStartSteps fallback
     const smokingNullStart = {

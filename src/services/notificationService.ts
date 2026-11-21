@@ -73,7 +73,7 @@ export async function notifySmokingGraceIfNeeded(
     await Notifications.scheduleNotificationAsync({
       content: {
         title: 'Your wick is smoking!',
-        body: 'Walk 350 steps within 60 minutes (or send a Spark) to save your streak.',
+        body: 'Walk 350 steps before midnight (or send a Spark) to save your streak.',
       },
       trigger: null,
     });

@@ -112,6 +112,10 @@ export interface EntitlementState {
   isEligibleForIntroTrial: boolean;
   starterDomeClaimed: boolean;
   firstInstallAt: number;
+  /** Latched forever once the 72-hour window has passed or the clock jumps backward. */
+  trialExpired?: boolean;
+  /** Trusted time credited toward the 7-day free share window. Does not follow a jumped clock. */
+  quotaElapsedMs?: number;
   freeVideoExportsThisWeek: number;
   weekKey: string;
 }

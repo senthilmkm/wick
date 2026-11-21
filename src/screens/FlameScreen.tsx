@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Candle3DCanvas } from '../components/Candle3DCanvas';
 import { InfoModal } from '../components/InfoModal';
 import { formatTimeLeftLabel } from '../engine/candleMath';
+import { DAILY_SHARE_BUTTON_TITLE } from '../services/shareCardService';
 import { CandleSnapshot, UserSettings, WaxLayer, WickTheme } from '../types/wick';
 
 interface FlameScreenProps {
@@ -15,7 +16,9 @@ interface FlameScreenProps {
   resumeTick?: number;
   windIntensity?: number;
   tiltAngle?: number;
+  maxWaxLayers?: number;
   statusMessage?: string | null;
+  shareCardsLabel: string;
   onStrikeLighter: () => void;
   onShareVideo: () => void;
   onSendSpark: () => void;
@@ -33,7 +36,9 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
   resumeTick,
   windIntensity = 0,
   tiltAngle = 0,
+  maxWaxLayers,
   statusMessage,
+  shareCardsLabel,
   onStrikeLighter,
   onShareVideo,
   onSendSpark,
@@ -140,8 +145,15 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
               <Text style={styles.sparkBtnText}>Ask Spark</Text>
             </Pressable>
           )}
-          <Pressable style={styles.iconBtn} onPress={onShareVideo}>
-            <Text style={[styles.iconBtnText, { color: theme.primaryText }]}>Share</Text>
+          <Pressable
+            style={styles.iconBtn}
+            onPress={onShareVideo}
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel={`${DAILY_SHARE_BUTTON_TITLE}. ${shareCardsLabel}`}
+          >
+            <Text style={[styles.iconBtnText, { color: theme.primaryText }]}>{DAILY_SHARE_BUTTON_TITLE}</Text>
+            <Text style={styles.shareQuotaText}>{shareCardsLabel}</Text>
           </Pressable>
           <Pressable
             style={styles.infoCircleBtn}
@@ -172,6 +184,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
           goalMet={goalMet}
           sedentaryDraft={isSedentaryDraft}
           candleName={settings.candleName}
+          maxWaxLayers={maxWaxLayers}
         />
       </Pressable>
 
@@ -376,13 +389,20 @@ const styles = StyleSheet.create({
   },
   iconBtn: {
     backgroundColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 18,
+    alignItems: 'center',
   },
   iconBtnText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  shareQuotaText: {
+    color: '#A1A1AA',
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 1,
   },
   infoCircleBtn: {
     width: 32,

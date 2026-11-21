@@ -6,12 +6,11 @@ import {
   CANDLE_MOOD_COLORS,
   deriveWaxLayerSpec,
   getLocalDateKey,
+  WeeklyRecapSummary,
 } from '../engine/candleMath';
 import { getVisibleLedgerLimit } from '../engine/trialGuard';
-import { createDefaultShareCardDriver, ShareCardService } from '../services/shareCardService';
+import { SHARE_WEEK_CARD_BUTTON_TITLE, WEEK_CARD_BUTTON_TITLE } from '../services/shareCardService';
 import { CandleMood, EntitlementState, WaxLayer, WickTheme } from '../types/wick';
-
-const shareCardService = new ShareCardService(createDefaultShareCardDriver());
 
 const MILESTONES = [
   { days: 7, label: 'Bronze Band', color: '#CD7F32' },
@@ -31,8 +30,10 @@ interface WaxLedgerScreenProps {
   candleName?: string;
   theme: WickTheme;
   entitlement: EntitlementState;
+  shareCardsLabel: string;
   onExportPdf: () => void;
   onUpgradePro: () => void;
+  onShareWeek: (recap: WeeklyRecapSummary) => Promise<void>;
 }
 
 export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
@@ -46,8 +47,10 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
   candleName,
   theme,
   entitlement,
+  shareCardsLabel,
   onExportPdf,
   onUpgradePro,
+  onShareWeek,
 }) => {
   const insets = useSafeAreaInsets();
   const [showRecap, setShowRecap] = useState(false);
@@ -81,8 +84,15 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
           </Text>
         </View>
         <View style={styles.headerActions}>
-          <Pressable style={styles.weekBtn} onPress={() => setShowRecap(true)}>
-            <Text style={styles.weekBtnText}>Week</Text>
+          <Pressable
+            style={styles.weekBtn}
+            onPress={() => setShowRecap(true)}
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel={`${WEEK_CARD_BUTTON_TITLE}. ${shareCardsLabel}`}
+          >
+            <Text style={styles.weekBtnText}>{WEEK_CARD_BUTTON_TITLE}</Text>
+            <Text style={styles.weekQuotaText}>{shareCardsLabel}</Text>
           </Pressable>
           <Pressable
             style={[styles.pdfBtn, { backgroundColor: theme.accent }]}
@@ -244,13 +254,19 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
                 { backgroundColor: theme.accent, opacity: isSharingWeek ? 0.6 : 1 },
               ]}
               disabled={isSharingWeek}
+              accessible
+              accessibilityRole="button"
+              accessibilityLabel={
+                isSharingWeek
+                  ? 'Preparing Card'
+                  : `${SHARE_WEEK_CARD_BUTTON_TITLE}. ${shareCardsLabel}`
+              }
               onPress={() => {
                 if (isSharingWeek) {
                   return;
                 }
                 setIsSharingWeek(true);
-                void shareCardService
-                  .shareWeeklyCard({ candleName, recap, theme })
+                void onShareWeek(recap)
                   .catch(() => {})
                   .finally(() => {
                     setIsSharingWeek(false);
@@ -258,8 +274,9 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
               }}
             >
               <Text style={styles.recapShareText}>
-                {isSharingWeek ? 'Preparing Card...' : 'Share Week'}
+                {isSharingWeek ? 'Preparing Card...' : SHARE_WEEK_CARD_BUTTON_TITLE}
               </Text>
+              {!isSharingWeek && <Text style={styles.recapShareQuota}>{shareCardsLabel}</Text>}
             </Pressable>
             <Pressable style={styles.recapDoneBtn} onPress={() => setShowRecap(false)}>
               <Text style={styles.recapDoneText}>Done</Text>
@@ -286,10 +303,12 @@ const styles = StyleSheet.create({
   weekBtn: {
     backgroundColor: 'rgba(255,255,255,0.1)',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderRadius: 16,
+    alignItems: 'center',
   },
   weekBtnText: { color: '#F5F5F7', fontWeight: '600', fontSize: 13 },
+  weekQuotaText: { color: '#A1A1AA', fontSize: 10, fontWeight: '600', marginTop: 1 },
   pdfBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16 },
   pdfBtnText: { color: '#0A0A0C', fontWeight: '700', fontSize: 13 },
   emptyCard: {
@@ -392,6 +411,7 @@ const styles = StyleSheet.create({
   recapMoodDot: { width: 10, height: 10, borderRadius: 5 },
   recapShareBtn: { paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginTop: 4 },
   recapShareText: { color: '#0A0A0C', fontSize: 15, fontWeight: '700' },
+  recapShareQuota: { color: '#0A0A0C', fontSize: 11, fontWeight: '600', opacity: 0.72, marginTop: 2 },
   recapDoneBtn: { alignItems: 'center', paddingVertical: 6 },
   recapDoneText: { color: '#A1A1AA', fontSize: 13 },
 });

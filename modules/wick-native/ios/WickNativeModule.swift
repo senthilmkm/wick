@@ -2,6 +2,7 @@ import ExpoModulesCore
 import Foundation
 import WidgetKit
 import CloudKit
+import Intents
 
 public class WickNativeModule: Module {
   private let appGroupId = "group.com.senthilmkm.wick"
@@ -9,6 +10,8 @@ public class WickNativeModule: Module {
   private let zoneName = "WickCircleZone"
   private let recordType = "FriendCandleStatus"
   private let sparkRecordType = "SparkRequest"
+  private let trialRecordType = "WickTrialAnchor"
+  private let trialRecordName = "trialAnchor"
   private let recordName = "myCandleStatus"
 
   private final class LockedBox<T>: @unchecked Sendable {
@@ -213,7 +216,7 @@ public class WickNativeModule: Module {
 
         let share = CKShare(rootRecord: record)
         share[CKShare.SystemFieldKey.title] = "Save \(senderName)'s Wick" as CKRecordValue
-        share.publicPermission = .readWrite
+        share.publicPermission = .readOnly
 
         let savedShareUrl = LockedBox<String?>(nil)
         let op = CKModifyRecordsOperation(recordsToSave: [record, share], recordIDsToDelete: nil)
@@ -281,6 +284,10 @@ public class WickNativeModule: Module {
     }
 
     AsyncFunction("completeSparkShareRecord") { (sparkId: String, stepsWalked: Int, promise: Promise) in
+      guard stepsWalked >= 500 else {
+        promise.resolve(false)
+        return
+      }
       let sharedDB = self.container.sharedCloudDatabase
       sharedDB.fetchAllRecordZones { zones, error in
         guard error == nil, let zones, !zones.isEmpty else {
@@ -326,7 +333,7 @@ public class WickNativeModule: Module {
            record.recordType == self.sparkRecordType,
            (record["status"] as? String) == "completed" {
           let sid = (record["sparkId"] as? String) ?? recID.recordName
-          let walked = (record["stepsWalked"] as? Int) ?? 500
+          let walked = (record["stepsWalked"] as? Int) ?? 0
           completedRescues.withLock {
             $0.append(["sparkId": sid, "stepsWalked": walked])
           }
@@ -351,6 +358,120 @@ public class WickNativeModule: Module {
         privateDB.add(delOp)
       }
       privateDB.add(fetchOp)
+    }
+
+    AsyncFunction("peekShareUrlKind") { (shareUrl: String, promise: Promise) in
+      guard let url = URL(string: shareUrl) else {
+        promise.resolve(["accepted": false, "kind": "unknown"])
+        return
+      }
+      let fetchedMeta = LockedBox<CKShare.Metadata?>(nil)
+      let metaOp = CKFetchShareMetadataOperation(shareURLs: [url])
+      metaOp.shouldFetchRootRecord = true
+      metaOp.perShareMetadataResultBlock = { _, res in
+        if case .success(let meta) = res {
+          fetchedMeta.withLock { $0 = meta }
+        }
+      }
+      metaOp.fetchShareMetadataResultBlock = { result in
+        guard case .success = result, let metadata = fetchedMeta.withLock({ $0 }) else {
+          promise.resolve(["accepted": false, "kind": "unknown"])
+          return
+        }
+        let root = metadata.rootRecord
+        let isSpark = root?.recordType == self.sparkRecordType
+        var payload: [String: Any] = [
+          "accepted": false,
+          "kind": isSpark ? "spark" : "friend",
+        ]
+        if isSpark, let root {
+          payload["sparkId"] = (root["sparkId"] as? String) ?? root.recordID.recordName
+          payload["senderName"] = (root["senderName"] as? String) ?? "Friend"
+          payload["stepsRequired"] = (root["stepsRequired"] as? Int) ?? 500
+          payload["expiresAt"] = (root["expiresAt"] as? Double) ?? 0.0
+        }
+        promise.resolve(payload)
+      }
+      self.container.add(metaOp)
+    }
+
+    AsyncFunction("fetchOrCreateTrialAnchor") { (promise: Promise) in
+      let privateDB = self.container.privateCloudDatabase
+      let zone = CKRecordZone(zoneID: self.zoneID)
+      privateDB.save(zone) { _, _ in
+        let recID = CKRecord.ID(recordName: self.trialRecordName, zoneID: self.zoneID)
+        privateDB.fetch(withRecordID: recID) { existing, error in
+          if let existing {
+            self.touchTrialAnchor(existing, db: privateDB, promise: promise)
+            return
+          }
+          if let ckErr = error as? CKError, ckErr.code != .unknownItem {
+            promise.resolve([:] as [String: Any])
+            return
+          }
+          if existing == nil, error != nil, !(error is CKError) {
+            promise.resolve([:] as [String: Any])
+            return
+          }
+          let created = CKRecord(recordType: self.trialRecordType, recordID: recID)
+          created["expired"] = 0 as CKRecordValue
+          privateDB.save(created) { saved, saveError in
+            if let saved, saveError == nil {
+              promise.resolve(self.trialPayload(saved))
+            } else {
+              promise.resolve([:] as [String: Any])
+            }
+          }
+        }
+      }
+    }
+
+    AsyncFunction("markTrialAnchorExpired") { (promise: Promise) in
+      let privateDB = self.container.privateCloudDatabase
+      let recID = CKRecord.ID(recordName: self.trialRecordName, zoneID: self.zoneID)
+      privateDB.fetch(withRecordID: recID) { existing, error in
+        guard let existing, error == nil else {
+          promise.resolve(false)
+          return
+        }
+        existing["expired"] = 1 as CKRecordValue
+        privateDB.save(existing) { _, saveError in
+          promise.resolve(saveError == nil)
+        }
+      }
+    }
+
+    AsyncFunction("isSleepFocusActive") { (promise: Promise) in
+      if #available(iOS 15.0, *) {
+        let center = INFocusStatusCenter.default
+        if center.authorizationStatus == .authorized {
+          promise.resolve(center.focusStatus.isFocused)
+          return
+        }
+      }
+      promise.resolve(false)
+    }
+  }
+
+  private func trialPayload(_ record: CKRecord) -> [String: Any] {
+    let created = (record.creationDate?.timeIntervalSince1970 ?? 0) * 1000
+    let modified = (record.modificationDate?.timeIntervalSince1970 ?? 0) * 1000
+    let expired = (record["expired"] as? NSNumber)?.intValue == 1
+    return [
+      "createdAtMs": created,
+      "serverNowMs": modified > 0 ? modified : created,
+      "expired": expired,
+    ]
+  }
+
+  private func touchTrialAnchor(_ record: CKRecord, db: CKDatabase, promise: Promise) {
+    record["ping"] = NSNumber(value: Date().timeIntervalSince1970)
+    db.save(record) { saved, error in
+      if let saved, error == nil {
+        promise.resolve(self.trialPayload(saved))
+      } else {
+        promise.resolve(self.trialPayload(record))
+      }
     }
   }
 }

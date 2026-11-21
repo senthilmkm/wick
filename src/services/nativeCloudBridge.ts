@@ -39,6 +39,14 @@ export interface WickNativeSpec {
   acceptShareUrlWithKind?(shareUrl: string): Promise<SparkShareAcceptanceResult>;
   completeSparkShareRecord?(sparkId: string, stepsWalked: number): Promise<boolean>;
   checkPendingSparkRescues?(): Promise<CompletedSparkRescueInfo[]>;
+  peekShareUrlKind?(shareUrl: string): Promise<SparkShareAcceptanceResult>;
+  fetchOrCreateTrialAnchor?(): Promise<{
+    createdAtMs?: number;
+    serverNowMs?: number;
+    expired?: boolean;
+  }>;
+  markTrialAnchorExpired?(): Promise<boolean>;
+  isSleepFocusActive?(): Promise<boolean>;
 }
 
 function getNativeModule(): WickNativeSpec | null {
@@ -92,6 +100,72 @@ export async function createNativeSparkShareUrl(
     return url.length > 0 ? url : null;
   } catch {
     return null;
+  }
+}
+
+export async function peekNativeShareUrlKind(
+  shareUrl: string
+): Promise<SparkShareAcceptanceResult> {
+  const mod = getNativeModule();
+  if (!mod?.peekShareUrlKind) {
+    return { accepted: false, kind: 'unknown' };
+  }
+  try {
+    return await mod.peekShareUrlKind(shareUrl);
+  } catch {
+    return { accepted: false, kind: 'unknown' };
+  }
+}
+
+export interface TrialAnchorInfo {
+  createdAtMs: number;
+  serverNowMs: number;
+  expired: boolean;
+}
+
+export async function fetchNativeTrialAnchor(): Promise<TrialAnchorInfo | null> {
+  const mod = getNativeModule();
+  if (!mod?.fetchOrCreateTrialAnchor) {
+    return null;
+  }
+  try {
+    const raw = await mod.fetchOrCreateTrialAnchor();
+    const createdAtMs = Number(raw?.createdAtMs);
+    const serverNowMs = Number(raw?.serverNowMs);
+    if (!Number.isFinite(createdAtMs) || createdAtMs <= 0) {
+      return null;
+    }
+    return {
+      createdAtMs,
+      serverNowMs: Number.isFinite(serverNowMs) && serverNowMs > 0 ? serverNowMs : createdAtMs,
+      expired: Boolean(raw?.expired),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function markNativeTrialAnchorExpired(): Promise<void> {
+  const mod = getNativeModule();
+  if (!mod?.markTrialAnchorExpired) {
+    return;
+  }
+  try {
+    await mod.markTrialAnchorExpired();
+  } catch {
+    // Local latch still closes the trial when iCloud is unreachable.
+  }
+}
+
+export async function fetchNativeSleepFocus(): Promise<boolean> {
+  const mod = getNativeModule();
+  if (!mod?.isSleepFocusActive) {
+    return false;
+  }
+  try {
+    return Boolean(await mod.isSleepFocusActive());
+  } catch {
+    return false;
   }
 }
 

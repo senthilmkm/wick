@@ -2,6 +2,7 @@ const mockMakeOffscreen = jest.fn();
 const mockEncodeToBase64 = jest.fn();
 const mockRNShareOpen = jest.fn();
 const mockRNShareText = jest.fn();
+const drawnTexts: string[] = [];
 
 jest.mock('@shopify/react-native-skia', () => ({
   ImageFormat: { PNG: 0 },
@@ -42,11 +43,17 @@ import { getThemeById } from '../src/constants/themes';
 import { WeeklyRecapSummary } from '../src/engine/candleMath';
 import {
   createDefaultShareCardDriver,
+  DAILY_SHARE_BUTTON_TITLE,
+  formatCardDate,
   formatDailyShareMessage,
   formatWeeklyShareMessage,
+  FREE_CARD_USED_TITLE,
   renderDailyCardDataUri,
   renderWeeklyCardDataUri,
+  SHARE_CARD_GUIDE_BODY,
+  SHARE_WEEK_CARD_BUTTON_TITLE,
   ShareCardService,
+  WEEK_CARD_BUTTON_TITLE,
 } from '../src/services/shareCardService';
 
 function makeMockSurface(base64 = 'AQID') {
@@ -57,7 +64,9 @@ function makeMockSurface(base64 = 'AQID') {
       drawRRect: jest.fn(),
       drawCircle: jest.fn(),
       drawOval: jest.fn(),
-      drawText: jest.fn(),
+      drawText: jest.fn((text: string) => {
+        drawnTexts.push(String(text));
+      }),
     })),
     flush: jest.fn(),
     makeImageSnapshot: jest.fn(() => ({
@@ -74,13 +83,14 @@ describe('shareCardService', () => {
     daysLit: 6,
     topMood: 'Calm',
     bands: [
-      { dateKey: '2026-11-14', colorHex: '#FF9F43', lit: true },
-      { dateKey: '2026-11-15', colorHex: '#27272A', lit: false },
+      { dateKey: '2026-11-14', colorHex: '#FF9F43', lit: true, steps: 4200 },
+      { dateKey: '2026-11-15', colorHex: '#27272A', lit: false, steps: 0 },
     ],
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
+    drawnTexts.length = 0;
   });
 
   it('formats daily and weekly messages with and without candleName / topMood', () => {
@@ -110,6 +120,29 @@ describe('shareCardService', () => {
         theme,
       })
     ).toContain('Day 1 • My wick is unlit morning');
+
+    expect(
+      formatDailyShareMessage({
+        candleName: 'Senthil',
+        streakDays: 5,
+        stepsToday: 6400,
+        dailyStepGoal: 8000,
+        state: 'SMOKING_GRACE',
+        flameIntensity: 0.2,
+        flameColorHex: '#FF9F43',
+        waxGrams: 120,
+        theme,
+        dateKey: '2026-11-20',
+        mood: 'Calm',
+      })
+    ).toContain('Senthil • Nov 20, 2026 • Day 5 • My wick is smoking grace (6,400 / 8,000 steps today) • Mood: Calm');
+    expect(formatCardDate('2026-11-20')).toBe('Nov 20, 2026');
+    expect(DAILY_SHARE_BUTTON_TITLE).toBe('Share Card');
+    expect(WEEK_CARD_BUTTON_TITLE).toBe('Week Card');
+    expect(SHARE_WEEK_CARD_BUTTON_TITLE).toBe('Share Week Card');
+    expect(FREE_CARD_USED_TITLE).toBe('Your Free Card Is Used');
+    expect(SHARE_CARD_GUIDE_BODY).toContain('PNG card');
+    expect(SHARE_CARD_GUIDE_BODY).toContain('One is free per week');
 
     expect(
       formatWeeklyShareMessage({
@@ -156,8 +189,13 @@ describe('shareCardService', () => {
         flameColorHex: '#FFF6D6',
         waxGrams: 200,
         theme,
+        dateKey: '2026-11-20',
+        mood: 'Grateful',
       })
     ).toBe('data:image/png;base64,DAILY_B64');
+    expect(drawnTexts).toEqual(
+      expect.arrayContaining(['Nov 20, 2026  •  Mood  Grateful', 'DAY 7 STREAK'])
+    );
 
     // Unlit daily card + empty base64
     mockMakeOffscreen.mockReturnValue(makeMockSurface(''));
@@ -176,6 +214,7 @@ describe('shareCardService', () => {
 
     // Weekly card with and without mood + empty base64 + exception branch
     mockMakeOffscreen.mockReturnValue(makeMockSurface('WEEK_B64'));
+    drawnTexts.length = 0;
     expect(
       renderWeeklyCardDataUri({
         candleName: 'Maya',
@@ -183,6 +222,12 @@ describe('shareCardService', () => {
         theme,
       })
     ).toBe('data:image/png;base64,WEEK_B64');
+    expect(drawnTexts).toEqual(
+      expect.arrayContaining([
+        '2026-11-14   •   Lit   •   4,200 steps',
+        '2026-11-15   •   Unlit   •   0 steps',
+      ])
+    );
 
     expect(
       renderWeeklyCardDataUri({
