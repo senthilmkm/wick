@@ -5,7 +5,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Candle3DCanvas } from '../components/Candle3DCanvas';
 import { InfoModal } from '../components/InfoModal';
 import { formatTimeLeftLabel } from '../engine/candleMath';
+import { rainNudgeOn } from '../engine/firstRunCopy';
 import { DAILY_SHARE_BUTTON_TITLE } from '../services/shareCardService';
+import { playRainNudge, stopRainNudge } from '../services/soundService';
 import { CandleSnapshot, ThemeId, UserSettings, WaxLayer, WickTheme } from '../types/wick';
 
 interface FlameScreenProps {
@@ -65,17 +67,14 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
   const lastDateKeyRef = useRef(snapshot.dateKey);
   const lastStepActivityAtRef = useRef(snapshot.updatedAt || Date.now());
 
-  useEffect(() => {
-    if (
-      snapshot.dateKey !== lastDateKeyRef.current ||
-      snapshot.stepsToday < lastStepsRef.current ||
-      snapshot.stepsToday > lastStepsRef.current
-    ) {
-      lastStepActivityAtRef.current = Date.now();
-    }
+  if (
+    snapshot.dateKey !== lastDateKeyRef.current ||
+    snapshot.stepsToday !== lastStepsRef.current
+  ) {
+    lastStepActivityAtRef.current = Date.now();
     lastDateKeyRef.current = snapshot.dateKey;
     lastStepsRef.current = snapshot.stepsToday;
-  }, [snapshot.stepsToday, snapshot.dateKey]);
+  }
 
   useEffect(() => {
     const timer = setInterval(() => setMinuteTick((t) => t + 1), 60000);
@@ -86,14 +85,23 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
   const goalMet = stepsRemaining === 0;
   const goalRatio = Math.min(1, snapshot.stepsToday / Math.max(1, settings.dailyStepGoal));
   const walkMins = Math.max(1, Math.round(stepsRemaining / 100));
-  const isSedentaryDraft =
-    !goalMet &&
-    snapshot.ignitedAt !== null &&
-    snapshot.state !== 'NIGHT_SLEEP' &&
-    snapshot.state !== 'GLASS_DOME' &&
-    snapshot.state !== 'SMOKING_GRACE' &&
-    snapshot.state !== 'EXTINGUISHED' &&
-    Date.now() - lastStepActivityAtRef.current >= 60 * 60 * 1000;
+  const rainOn = rainNudgeOn({
+    goalMet,
+    ignitedAt: snapshot.ignitedAt,
+    state: snapshot.state,
+    stillForMs: Date.now() - lastStepActivityAtRef.current,
+  });
+
+  useEffect(() => {
+    if (!rainOn || !settings.soundEffectsEnabled) {
+      void stopRainNudge();
+      return;
+    }
+    void playRainNudge(true, settings.liveBreezeEnabled);
+    return () => {
+      void stopRainNudge();
+    };
+  }, [rainOn, settings.soundEffectsEnabled, settings.liveBreezeEnabled]);
 
   const needsSpark =
     snapshot.state === 'FLICKERING' ||
@@ -210,7 +218,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
           tiltAngle={tiltAngle}
           lanternMode={settings.lanternModeEnabled}
           goalMet={goalMet}
-          sedentaryDraft={isSedentaryDraft}
+          sedentaryDraft={rainOn}
           candleName={settings.candleName}
           maxWaxLayers={maxWaxLayers}
         />
@@ -285,15 +293,6 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
       {statusMessage && (
         <View style={styles.pacePill}>
           <Text style={[styles.paceText, { color: theme.primaryText }]}>{statusMessage}</Text>
-        </View>
-      )}
-
-      {/* 1-Hour Sedentary Draft Nudge */}
-      {isSedentaryDraft && !statusMessage && (
-        <View style={styles.pacePill}>
-          <Text style={[styles.paceText, { color: '#FF9F43' }]}>
-            Still for 1h — walk 100 steps to steady the flame
-          </Text>
         </View>
       )}
 

@@ -45,6 +45,14 @@ const CANVAS_W = Math.min(SCREEN_W, 420);
 const CANVAS_H = 520;
 const CX = CANVAS_W / 2;
 
+const RAIN_DROPS = [
+  { dx: -34, phase: 0, length: 14 },
+  { dx: -10, phase: 0.33, length: 10 },
+  { dx: 12, phase: 0.16, length: 16 },
+  { dx: 36, phase: 0.58, length: 11 },
+  { dx: -22, phase: 0.74, length: 12 },
+];
+
 const SPARK_VECTORS = [
   { dx: -32, dy: -38 },
   { dx: 30, dy: -34 },
@@ -99,6 +107,7 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
   const bloom = useSharedValue(1);
   const sparkProgress = useSharedValue(0);
   const smokeDrift = useSharedValue(0);
+  const rainFall = useSharedValue(0);
   const prevStepsRef = useRef(snapshot.stepsToday);
 
   useEffect(() => {
@@ -184,6 +193,13 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
       bloom.value = 1;
     }
 
+    if (sedentaryDraft) {
+      rainFall.value = 0;
+      rainFall.value = withRepeat(withTiming(1, { duration: 1600, easing: Easing.linear }), -1, false);
+    } else {
+      rainFall.value = 0;
+    }
+
     if (snapshot.state === 'SMOKING_GRACE') {
       smokeDrift.value = withRepeat(
         withTiming(1, { duration: 2400, easing: Easing.out(Easing.quad) }),
@@ -193,7 +209,7 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
     } else {
       smokeDrift.value = 0;
     }
-  }, [snapshot.state, resumeTick, sedentaryDraft, breath, sway, bloom, sparkProgress, smokeDrift]);
+  }, [snapshot.state, resumeTick, sedentaryDraft, breath, sway, bloom, sparkProgress, smokeDrift, rainFall]);
 
   const streakScale = Math.min(1, Math.max(0, snapshot.streakDays) / 30);
   const baseCandleH = Math.round(190 + streakScale * 65); // 190px (Day 0) -> 255px (Day 30+)
@@ -343,7 +359,7 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
     <View
       style={styles.container}
       accessible
-      accessibilityLabel={`Your wick is ${snapshot.state.toLowerCase().replace('_', ' ')}, ${snapshot.stepsToday} steps today`}
+      accessibilityLabel={`Your wick is ${snapshot.state.toLowerCase().replace('_', ' ')}, ${snapshot.stepsToday} steps today${sedentaryDraft ? ', rain on the flame' : ''}`}
     >
       <View style={styles.canvas}>
         <Canvas style={styles.canvas}>
@@ -552,6 +568,18 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
           </Group>
         )}
 
+        {sedentaryDraft &&
+          RAIN_DROPS.map((drop) => (
+            <RainDrop
+              key={drop.dx}
+              fall={rainFall}
+              dx={drop.dx}
+              phase={drop.phase}
+              length={drop.length}
+              travel={Math.max(120, flameBaseY - 20)}
+            />
+          ))}
+
         {/* Flint & Live Walking Embers */}
         {(snapshot.state === 'IGNITING' || (intensity > 0 && !isNight)) &&
           SPARK_VECTORS.map((sp, i) => (
@@ -626,6 +654,28 @@ export const Candle3DCanvas: React.FC<Candle3DCanvasProps> = ({
         )}
       </View>
     </View>
+  );
+};
+
+const RainDrop: React.FC<{
+  fall: { value: number };
+  dx: number;
+  phase: number;
+  length: number;
+  travel: number;
+}> = ({ fall, dx, phase, length, travel }) => {
+  const transform = useDerivedValue(() => {
+    const t = (fall.value + phase) % 1;
+    return [{ translateY: t * travel }];
+  });
+  const opacity = useDerivedValue(() => {
+    const t = (fall.value + phase) % 1;
+    return t < 0.08 || t > 0.88 ? 0 : 0.72;
+  });
+  return (
+    <Group transform={transform} opacity={opacity}>
+      <RoundedRect x={CX + dx} y={18} width={1.4} height={length} r={0.7} color="#D7ECFF" />
+    </Group>
   );
 };
 

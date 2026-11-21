@@ -3,7 +3,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { Swipeable } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FirstHint } from '../components/FirstHint';
-import { candleStateLabel } from '../engine/firstRunCopy';
+import { candleStateLabel, CIRCLE_EMPTY_BODY, CIRCLE_INVITE_SENT_BODY } from '../engine/firstRunCopy';
 import { ActiveSparkRescue, FriendCandle, WickTheme } from '../types/wick';
 
 interface CircleScreenProps {
@@ -18,6 +18,7 @@ interface CircleScreenProps {
   onRemoveFriend?: (friendId: string) => void;
   hint?: string | null;
   onDismissHint?: () => void;
+  inviteSent?: boolean;
 }
 
 export const CircleScreen: React.FC<CircleScreenProps> = ({
@@ -32,6 +33,7 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
   onRemoveFriend,
   hint = null,
   onDismissHint,
+  inviteSent = false,
 }) => {
   const insets = useSafeAreaInsets();
 
@@ -104,7 +106,7 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
           <Text style={[styles.emptyTitle, { color: theme.primaryText }]}>
             Walk with one friend
           </Text>
-          <Text style={styles.emptyBody}>When they accept, you both show up here.</Text>
+          <Text style={styles.emptyBody}>{inviteSent ? CIRCLE_INVITE_SENT_BODY : CIRCLE_EMPTY_BODY}</Text>
         </View>
       ) : (
         friends.map((friend) => {

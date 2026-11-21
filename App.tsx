@@ -67,10 +67,14 @@ import {
   recordVideoExport,
 } from './src/engine/trialGuard';
 import {
+  celebrationLine,
   flameCoachLine,
   FREE_STAYS,
   PRO_ADDS,
+  savedDayLine,
+  streakBandLine,
   shouldShowLighter,
+  WICK_LIT_LINE,
   TAB_HINTS,
   tabsShouldHide,
   walkLitTheCandle,
@@ -125,7 +129,7 @@ import {
   scheduleMorningWakeNotification,
 } from './src/services/notificationService';
 import { playMatchStrikeSound } from './src/services/soundService';
-import { createDefaultShareCardDriver, ShareCardService } from './src/services/shareCardService';
+import { createDefaultShareCardDriver, formatCardDate, ShareCardService } from './src/services/shareCardService';
 import { DEFAULT_SETTINGS, KEY_WAX_LAYERS, LocalStorageService } from './src/services/storageService';
 import { subscribeToTiltAngle } from './src/services/tiltService';
 import {
@@ -200,6 +204,8 @@ const KEY_VISITOR_ID = 'wick.visitor.candle.id';
 const KEY_FLAME_COACH = 'wick.coach.flame.v1';
 const KEY_TABS_MAY_HIDE = 'wick.tabs.may_hide.v1';
 const KEY_LIT_BY_WALK = 'wick.lit.by.walk.v1';
+const KEY_STEPS_OFF = 'wick.steps.off.v1';
+const KEY_INVITE_SENT = 'wick.circle.invite_sent.v1';
 const KEY_SEEN_FRIEND_ARRIVALS = 'wick.friends.arrived.v1';
 const KEY_SEEN_TABS = 'wick.hint.tabs.v1';
 const KEY_SEEN_NUDGES = 'wick.nudge.seen.v1';
@@ -290,6 +296,8 @@ function WickRoot() {
   const [flameCoachOn, setFlameCoachOn] = useState(() => kvGet(KEY_FLAME_COACH) !== '1');
   const [tabsMayHide, setTabsMayHide] = useState(() => kvGet(KEY_TABS_MAY_HIDE) === '1');
   const [litByWalk, setLitByWalk] = useState(() => kvGet(KEY_LIT_BY_WALK) === '1');
+  const [stepsOff, setStepsOff] = useState(() => kvGet(KEY_STEPS_OFF) === '1');
+  const [inviteSent, setInviteSent] = useState(() => kvGet(KEY_INVITE_SENT) === '1');
   const [seenTabs, setSeenTabs] = useState<string[]>(() => readIdList(kvGet(KEY_SEEN_TABS)));
   const [tabsVisible, setTabsVisible] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -495,13 +503,23 @@ function WickRoot() {
         if (crossedGoalToday) {
           goalCelebratedDateRef.current = res.snapshot.dateKey;
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          showToast('Daily goal reached! Your wick is blazing.');
         }
         void notifySmokingGraceIfNeeded(prev.state, res.snapshot.state);
-        if (walkLitTheCandle(prev, res.snapshot)) {
+        const litNow = walkLitTheCandle(prev, res.snapshot);
+        if (litNow) {
           kvSet(KEY_LIT_BY_WALK, '1');
           setLitByWalk(true);
         }
+        const savedLine = res.completedDayLayer
+          ? savedDayLine(formatCardDate(res.completedDayLayer.date), res.completedDayLayer.stepsAchieved)
+          : null;
+        const moment = celebrationLine({
+          band: streakBandLine(prev.streakDays, res.snapshot.streakDays),
+          lit: litNow,
+          goal: crossedGoalToday,
+          saved: savedLine,
+        });
+        if (moment) showToast(moment);
         if (res.completedDayLayer) {
           const nextLayers = storageService.appendWaxLayer(res.completedDayLayer);
           setWaxLayers(nextLayers);
@@ -671,7 +689,15 @@ function WickRoot() {
 
   const syncHealthKit = useCallback(async () => {
     const steps = await fetchTodayHealthKitSteps();
-    if (steps === null) {
+    const off = steps === null;
+    setStepsOff((current) => {
+      if (current === off) {
+        return current;
+      }
+      kvSet(KEY_STEPS_OFF, off ? '1' : '0');
+      return off;
+    });
+    if (off) {
       return;
     }
     const todayKey = getLocalDateKey(trustedDate());
@@ -1730,11 +1756,16 @@ function WickRoot() {
       return;
     }
     try {
-      await Share.share({
+      const result = await Share.share({
         title: 'Pair our Wick Candles',
         message: `Join my Wick Circle to keep our candles lit together: ${ckShareUrl}`,
         url: ckShareUrl,
       });
+      if (result.action === Share.dismissedAction) {
+        return;
+      }
+      kvSet(KEY_INVITE_SENT, '1');
+      setInviteSent(true);
       showToast('Circle invite link shared.');
     } catch {
       showToast('Could not open Share Sheet.');
@@ -1861,7 +1892,7 @@ function WickRoot() {
     showToast(`${getThemeById(themeId).name} is on.`);
   };
   const trialLooks =
-    accessReady && isInReverseTrial(entitlement, trustedNowMs) && !entitlement.isPro
+    litByWalk && accessReady && isInReverseTrial(entitlement, trustedNowMs) && !entitlement.isPro
       ? THEME_LIST.filter((look) => look.isPro)
       : null;
 
@@ -1884,6 +1915,9 @@ function WickRoot() {
           onComplete={(completion) => {
             const patch = buildOnboardingSettings(completion);
             handleUpdateSettings(patch);
+            const stepsAreOff = completion.healthSteps == null;
+            kvSet(KEY_STEPS_OFF, stepsAreOff ? '1' : '0');
+            setStepsOff(stepsAreOff);
             kvSet(KEY_ONBOARDED, '1');
             void SecureStore.setItemAsync(SECURE_ONBOARDED, '1').catch(() => {});
             const now = trustedDate();
@@ -1899,6 +1933,7 @@ function WickRoot() {
               if (walkLitTheCandle(prev, next)) {
                 kvSet(KEY_LIT_BY_WALK, '1');
                 setLitByWalk(true);
+                showToast(WICK_LIT_LINE);
               }
               return next;
             });
@@ -1943,6 +1978,8 @@ function WickRoot() {
     setShowMoodModal(false);
     setFlameCoachOn(true);
     setLitByWalk(false);
+    setStepsOff(false);
+    setInviteSent(false);
     setTabsMayHide(false);
     setTabsVisible(true);
     setSeenTabs([]);
@@ -1957,19 +1994,29 @@ function WickRoot() {
       settings,
       now: new Date(),
     });
-    if (
+    const crossedGoal =
       snapshot.stepsToday < settings.dailyStepGoal &&
       res.snapshot.stepsToday >= settings.dailyStepGoal &&
-      goalCelebratedDateRef.current !== res.snapshot.dateKey
-    ) {
+      goalCelebratedDateRef.current !== res.snapshot.dateKey;
+    if (crossedGoal) {
       goalCelebratedDateRef.current = res.snapshot.dateKey;
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      showToast('Daily goal reached! Your wick is blazing.');
     }
-    if (walkLitTheCandle(snapshot, res.snapshot)) {
+    const litNow = walkLitTheCandle(snapshot, res.snapshot);
+    if (litNow) {
       kvSet(KEY_LIT_BY_WALK, '1');
       setLitByWalk(true);
     }
+    const savedLine = res.completedDayLayer
+      ? savedDayLine(formatCardDate(res.completedDayLayer.date), res.completedDayLayer.stepsAchieved)
+      : null;
+    const moment = celebrationLine({
+      band: streakBandLine(snapshot.streakDays, res.snapshot.streakDays),
+      lit: litNow,
+      goal: crossedGoal,
+      saved: savedLine,
+    });
+    if (moment) showToast(moment);
     setSnapshot(res.snapshot);
     storageService.saveSnapshot(res.snapshot, Date.now());
     void SecureStore.setItemAsync(SECURE_SNAPSHOT, JSON.stringify(res.snapshot));
@@ -2058,16 +2105,24 @@ function WickRoot() {
             void handleBlowOutWithMic();
           }}
           onToggleControlsVisibility={scheduleAutoHide}
-          coachLine={flameCoachOn || !litByWalk ? flameCoachLine(snapshot.state, litByWalk) : null}
-          onDismissCoach={
-            litByWalk
-              ? () => {
-                  setFlameCoachOn(false);
-                  kvSet(KEY_FLAME_COACH, '1');
-                }
-              : undefined
+          coachLine={
+            stepsOff || flameCoachOn || !litByWalk
+              ? flameCoachLine(snapshot.state, litByWalk, stepsOff)
+              : null
           }
-          showLighter={shouldShowLighter(snapshot.state, litByWalk)}
+          onDismissCoach={
+            stepsOff
+              ? () => {
+                  void Linking.openSettings();
+                }
+              : litByWalk
+                ? () => {
+                    setFlameCoachOn(false);
+                    kvSet(KEY_FLAME_COACH, '1');
+                  }
+                : undefined
+          }
+          showLighter={shouldShowLighter(snapshot.state, litByWalk, stepsOff)}
           trialLooks={trialLooks}
           onSelectLook={chooseLook}
         />
@@ -2077,7 +2132,6 @@ function WickRoot() {
         <WaxLedgerScreen
           layers={waxLayers}
           streakDays={snapshot.streakDays}
-          waxGrams={snapshot.waxGrams}
           todaySteps={snapshot.stepsToday}
           dailyStepGoal={settings.dailyStepGoal}
           todayMood={snapshot.mood}
@@ -2121,6 +2175,7 @@ function WickRoot() {
           friends={friends}
           activeRescue={activeRescue}
           theme={theme}
+          inviteSent={inviteSent}
           onInviteFriend={() => {
             void handleInviteFriend();
           }}

@@ -131,6 +131,12 @@ export function computePaceRatio(
 /**
  * Maps a CandleState + paceRatio to flame intensity in [0, 1].
  */
+export function flameFromSteps(stepsToday: number, dailyStepGoal: number): number {
+  const goal = Number.isFinite(dailyStepGoal) && dailyStepGoal > 0 ? dailyStepGoal : 1;
+  const steps = Number.isFinite(stepsToday) ? Math.max(0, stepsToday) : 0;
+  return clamp(0.2 + (steps / goal) * 0.8, 0.2, 1);
+}
+
 export function computeFlameIntensity(state: CandleState, paceRatio: number): number {
   switch (state) {
     case 'UNLIT_MORNING':

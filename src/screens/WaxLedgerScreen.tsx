@@ -11,19 +11,12 @@ import {
 import { getVisibleLedgerLimit } from '../engine/trialGuard';
 import { SHARE_WEEK_CARD_BUTTON_TITLE, WEEK_CARD_BUTTON_TITLE } from '../services/shareCardService';
 import { FirstHint } from '../components/FirstHint';
+import { nextStreakBandLine } from '../engine/firstRunCopy';
 import { CandleMood, EntitlementState, WaxLayer, WickTheme } from '../types/wick';
-
-const MILESTONES = [
-  { days: 7, label: 'Bronze Band', color: '#CD7F32' },
-  { days: 14, label: 'Silver Band', color: '#CBD5E1' },
-  { days: 30, label: 'Gold Band', color: '#FBBF24' },
-  { days: 100, label: 'Diamond Band', color: '#7CC6FE' },
-];
 
 interface WaxLedgerScreenProps {
   layers: WaxLayer[];
   streakDays: number;
-  waxGrams: number;
   todaySteps?: number;
   dailyStepGoal?: number;
   todayMood?: CandleMood;
@@ -42,7 +35,6 @@ interface WaxLedgerScreenProps {
 export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
   layers,
   streakDays,
-  waxGrams,
   todaySteps = 0,
   dailyStepGoal = 8000,
   todayMood,
@@ -63,8 +55,7 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
   const limit = getVisibleLedgerLimit(entitlement);
   const visibleLayers = [...layers].reverse().slice(0, limit);
   const todaySpec = deriveWaxLayerSpec(todaySteps, dailyStepGoal);
-  const nextMilestone = MILESTONES.find((m) => streakDays < m.days) ?? MILESTONES[MILESTONES.length - 1];
-  const milestonePct = Math.min(100, Math.round((streakDays / nextMilestone.days) * 100));
+  const nextBand = nextStreakBandLine(streakDays);
   const recap = buildWeeklyRecapSummary(layers, todaySteps, dailyStepGoal, todayDateKey, todayMood);
   const titlePrefix = candleName?.trim() ? candleName.trim().toUpperCase() : 'WICK';
 
@@ -84,9 +75,8 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
           <Text style={[styles.title, { color: theme.primaryText }]} numberOfLines={1} adjustsFontSizeToFit>
             {candleName?.trim() ? `${candleName.trim()} • Wax Ledger` : 'Wax Ledger'}
           </Text>
-          <Text style={styles.subtitle}>
-            {streakDays} day streak • {waxGrams}g wax earned
-          </Text>
+          <Text style={styles.subtitle}>{streakDays} day streak</Text>
+          {nextBand ? <Text style={styles.subtitle}>{nextBand}</Text> : null}
           {hint && onDismissHint ? <FirstHint text={hint} onDismiss={onDismissHint} /> : null}
         </View>
         <View style={styles.headerActions}>
@@ -108,66 +98,15 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
         </View>
       </View>
 
-      {/* Streak Milestone Progress */}
-      <View style={styles.milestoneCard}>
-        <View style={styles.milestoneTop}>
-          <Text style={[styles.milestoneLabel, { color: nextMilestone.color }]}>
-            Next Milestone: {nextMilestone.label} ({nextMilestone.days}d)
-          </Text>
-          <Text style={styles.milestoneCount}>
-            {streakDays} / {nextMilestone.days}d
-          </Text>
-        </View>
-        <View style={styles.milestoneTrack}>
-          <View
-            style={[
-              styles.milestoneFill,
-              { width: `${milestonePct}%`, backgroundColor: nextMilestone.color },
-            ]}
-          />
-        </View>
-        <View style={styles.badgeRow}>
-          {MILESTONES.map((m) => {
-            const earned = streakDays >= m.days;
-            return (
-              <View
-                key={m.days}
-                style={[
-                  styles.milestoneBadge,
-                  earned && { borderColor: m.color, backgroundColor: `${m.color}22` },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.badgeDot,
-                    { backgroundColor: earned ? m.color : '#52525B' },
-                  ]}
-                />
-                <Text
-                  style={[
-                    styles.badgeText,
-                    { color: earned ? m.color : '#71717A' },
-                  ]}
-                >
-                  {m.days}d {m.label.replace(' Band', '')}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-      </View>
-
       {/* Today's In-Progress Wax Band */}
       <View style={styles.todayRow}>
         <View style={[styles.swatch, { backgroundColor: todaySpec.colorHex }]} />
         <View style={styles.layerInfo}>
           <Text style={[styles.layerDate, { color: theme.primaryText }]}>Today (In Progress)</Text>
           <Text style={styles.layerMeta}>
-            {todaySteps.toLocaleString('en-US')} / {dailyStepGoal.toLocaleString('en-US')} steps • +
-            {todaySpec.waxGramsEarned}g at midnight
+            {todaySteps.toLocaleString('en-US')} / {dailyStepGoal.toLocaleString('en-US')} steps
           </Text>
         </View>
-        <Text style={styles.thickness}>{todaySpec.thicknessMm.toFixed(1)}mm</Text>
       </View>
 
       {visibleLayers.length === 0 ? (
@@ -189,7 +128,6 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
                 {layer.stepGoal.toLocaleString('en-US')} steps
               </Text>
             </View>
-            <Text style={styles.thickness}>{layer.thicknessMm.toFixed(1)}mm</Text>
           </View>
         ))
       )}
@@ -342,36 +280,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   upgradeText: { color: '#FF9F43', fontWeight: '600', fontSize: 14 },
-  milestoneCard: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 14,
-    padding: 14,
-    gap: 8,
-  },
-  milestoneTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  milestoneLabel: { fontSize: 13, fontWeight: '700' },
-  milestoneCount: { color: '#A1A1AA', fontSize: 12, fontWeight: '600' },
-  milestoneTrack: {
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    overflow: 'hidden',
-  },
-  milestoneFill: { height: 4, borderRadius: 2 },
-  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 },
-  milestoneBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-  },
-  badgeDot: { width: 7, height: 7, borderRadius: 4 },
-  badgeText: { fontSize: 11, fontWeight: '600' },
   todayRow: {
     flexDirection: 'row',
     alignItems: 'center',

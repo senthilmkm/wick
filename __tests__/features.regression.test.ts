@@ -174,6 +174,12 @@ describe('Wick enhancements & bug-fix regression suite', () => {
       now: new Date(afternoon.getTime() + 5 * 60 * 1000),
     });
     expect(nextEval.snapshot.state).toBe('BLAZING');
-    expect(nextEval.snapshot.flameIntensity).toBeGreaterThanOrEqual(0.85);
+    const brighter = evaluateCandleState({
+      snapshot: rescued,
+      stepsToday: 4000,
+      settings: DEFAULT_SETTINGS,
+      now: new Date(afternoon.getTime() + 5 * 60 * 1000),
+    });
+    expect(brighter.snapshot.flameIntensity).toBeGreaterThan(nextEval.snapshot.flameIntensity);
   });
 });

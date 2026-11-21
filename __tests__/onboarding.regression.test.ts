@@ -1,8 +1,19 @@
 import { createMorningSnapshot } from '../src/engine/candleStateMachine';
 import {
   candleStateLabel,
+  CIRCLE_EMPTY_BODY,
+  CIRCLE_INVITE_SENT_BODY,
   flameCoachLine,
   shouldShowLighter,
+  celebrationLine,
+  GOAL_FULL_LINE,
+  nextStreakBandLine,
+  RAIN_STILL_MS,
+  rainNudgeOn,
+  savedDayLine,
+  STEPS_OFF_LINE,
+  streakBandLine,
+  WICK_LIT_LINE,
   TAB_HINTS,
   tabsShouldHide,
   walkLitTheCandle,
@@ -55,6 +66,10 @@ describe('onboarding flow regression', () => {
     expect(moveOnboardingStep('permissions', 1)).toBe('permissions');
     expect(moveOnboardingStep('permissions', -1)).toBe('goal');
     expect(flameCoachLine('UNLIT_MORNING')).toBe('Take 5 steps.');
+    expect(flameCoachLine('UNLIT_MORNING', false, true)).toBe(STEPS_OFF_LINE);
+    expect(flameCoachLine('BLAZING', false, true)).toBe(
+      'Walk to keep it bright. Hold the candle for night, rest, or a share.'
+    );
     expect(flameCoachLine('NIGHT_SLEEP', true)).toBe('Tap the lighter, or take 5 steps.');
     expect(flameCoachLine('BLAZING')).toBe(
       'Walk to keep it bright. Hold the candle for night, rest, or a share.'
@@ -73,7 +88,55 @@ describe('onboarding flow regression', () => {
     expect(candleStateLabel('UNLIT_MORNING')).toBe('Unlit');
     expect(candleStateLabel('IGNITING')).toBe('Lighting');
     expect(candleStateLabel('OTHER')).toBe('Candle');
+    expect(CIRCLE_EMPTY_BODY).toBe('When they accept, you both show up here.');
+    expect(CIRCLE_INVITE_SENT_BODY).toBe('Invite sent. They show up here when they open Wick.');
+    expect(WICK_LIT_LINE).toBe('Your wick is lit.');
+    expect(GOAL_FULL_LINE).toBe('Goal. The wick is full.');
+    expect(savedDayLine('Nov 20, 2026', 8200)).toBe('Nov 20, 2026 is saved. 8,200 steps.');
+    expect(savedDayLine('Nov 20, 2026', Number.NaN)).toBe('Nov 20, 2026 is saved. 0 steps.');
+    expect(streakBandLine(6, 7)).toBe('7 days. Bronze.');
+    expect(streakBandLine(13, 14)).toBe('14 days. Silver.');
+    expect(streakBandLine(29, 30)).toBe('30 days. Gold.');
+    expect(streakBandLine(6, 30)).toBe('30 days. Gold.');
+    expect(streakBandLine(99, 100)).toBe('100 days. Diamond.');
+    expect(streakBandLine(7, 8)).toBeNull();
+    expect(streakBandLine(7, 7)).toBeNull();
+    expect(streakBandLine(Number.NaN, 7)).toBeNull();
+    expect(streakBandLine(6, Number.NaN)).toBeNull();
+    expect(nextStreakBandLine(0)).toBe('Next: Bronze at 7 days.');
+    expect(nextStreakBandLine(7)).toBe('Next: Silver at 14 days.');
+    expect(nextStreakBandLine(14)).toBe('Next: Gold at 30 days.');
+    expect(nextStreakBandLine(30)).toBe('Next: Diamond at 100 days.');
+    expect(nextStreakBandLine(100)).toBeNull();
+    expect(nextStreakBandLine(-1)).toBeNull();
+    expect(nextStreakBandLine(Number.NaN)).toBeNull();
+    expect(
+      celebrationLine({ band: '7 days. Bronze.', lit: true, goal: true, saved: 'saved' })
+    ).toBe('7 days. Bronze.');
+    expect(celebrationLine({ band: null, lit: true, goal: true, saved: 'saved' })).toBe(WICK_LIT_LINE);
+    expect(celebrationLine({ band: null, lit: false, goal: true, saved: 'saved' })).toBe(GOAL_FULL_LINE);
+    expect(celebrationLine({ band: null, lit: false, goal: false, saved: 'saved' })).toBe('saved');
+    expect(celebrationLine({ band: null, lit: false, goal: false, saved: null })).toBeNull();
+    const raining = {
+      goalMet: false,
+      ignitedAt: 1,
+      state: 'BLAZING',
+      stillForMs: RAIN_STILL_MS,
+    };
+    expect(rainNudgeOn(raining)).toBe(true);
+    expect(rainNudgeOn({ ...raining, stillForMs: RAIN_STILL_MS + 1 })).toBe(true);
+    expect(rainNudgeOn({ ...raining, state: 'FLICKERING' })).toBe(true);
+    expect(rainNudgeOn({ ...raining, goalMet: true })).toBe(false);
+    expect(rainNudgeOn({ ...raining, ignitedAt: null })).toBe(false);
+    expect(rainNudgeOn({ ...raining, ignitedAt: Number.NaN })).toBe(false);
+    expect(rainNudgeOn({ ...raining, stillForMs: RAIN_STILL_MS - 1 })).toBe(false);
+    expect(rainNudgeOn({ ...raining, stillForMs: Number.NaN })).toBe(false);
+    for (const state of ['NIGHT_SLEEP', 'GLASS_DOME', 'SMOKING_GRACE', 'EXTINGUISHED', 'UNLIT_MORNING']) {
+      expect(rainNudgeOn({ ...raining, state })).toBe(false);
+    }
     expect(shouldShowLighter('UNLIT_MORNING', false)).toBe(false);
+    expect(shouldShowLighter('UNLIT_MORNING', false, true)).toBe(true);
+    expect(shouldShowLighter('BLAZING', false, true)).toBe(false);
     expect(shouldShowLighter('UNLIT_MORNING', true)).toBe(true);
     expect(shouldShowLighter('NIGHT_SLEEP', true)).toBe(true);
     expect(shouldShowLighter('BLAZING', true)).toBe(false);

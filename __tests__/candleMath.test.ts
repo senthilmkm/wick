@@ -4,6 +4,7 @@ import {
   computeDayProgress,
   computeExpectedSteps,
   computeFlameIntensity,
+  flameFromSteps,
   computePaceRatio,
   deriveWaxLayerSpec,
   formatTimeLeftLabel,
@@ -127,6 +128,13 @@ describe('candleMath', () => {
     const goalMetPace = computePaceRatio(3000, 500, 3000);
     expect(goalMetPace).toBe(1.2);
     expect(computeFlameIntensity('BLAZING', goalMetPace)).toBeCloseTo(0.85, 4);
+    expect(flameFromSteps(0, 8000)).toBeCloseTo(0.2);
+    expect(flameFromSteps(4000, 8000)).toBeCloseTo(0.6);
+    expect(flameFromSteps(8000, 8000)).toBe(1);
+    expect(flameFromSteps(9000, 8000)).toBe(1);
+    expect(flameFromSteps(100, 0)).toBe(1);
+    expect(flameFromSteps(Number.NaN, 8000)).toBeCloseTo(0.2);
+    expect(flameFromSteps(100, Number.NaN)).toBe(1);
   });
 
   it('detects nighttime window accurately for standard and post-midnight sleep schedules', () => {

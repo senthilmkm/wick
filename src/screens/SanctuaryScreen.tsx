@@ -234,7 +234,7 @@ export const SanctuaryScreen: React.FC<SanctuaryScreenProps> = ({
 
         <SettingSwitch
           label="Sound"
-          hint="Plays when the lighter strikes."
+          hint="Plays for the lighter and the rain."
           value={settings.soundEffectsEnabled}
           color={theme.primaryText}
           onValueChange={(val) => onUpdateSettings({ soundEffectsEnabled: val })}
