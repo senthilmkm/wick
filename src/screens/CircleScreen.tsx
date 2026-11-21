@@ -22,8 +22,8 @@ const PAIR_STEPS = [
     body: 'Long-press your iPhone Lock Screen -> Customize -> Add Widgets -> Wick to watch your candle live.',
   },
   {
-    step: '5. Nudge & Spark Rescue (500 Steps)',
-    body: 'Tap "Nudge" anytime to cheer a friend on. If their candle is fading, they tap "Send Spark" and text you the link — once you walk 500 steps, Wick sends those steps via iCloud and automatically reignites their candle!',
+    step: '5. Nudge & Ask for Spark (500 Steps)',
+    body: 'Tap "Nudge" anytime to cheer a friend on. If you need help keeping your flame alive, tap "Ask for Spark (500 Steps)" in Circle (or "Ask Spark" on Flame when fading) and text them the link — once they walk 500 steps, Wick syncs via iCloud and automatically reignites your candle!',
   },
 ];
 
@@ -80,6 +80,25 @@ export const CircleScreen: React.FC<CircleScreenProps> = ({
             <Text style={styles.infoBtnText}>i</Text>
           </Pressable>
         </View>
+      </View>
+
+      <View style={styles.sparkAskCard}>
+        <View style={styles.sparkAskInfo}>
+          <Text style={[styles.sparkAskTitle, { color: theme.primaryText }]}>
+            Ask a Friend for Spark
+          </Text>
+          <Text style={styles.sparkAskBody}>
+            Text any friend a rescue link — when they walk 500 steps, your candle reignites.
+          </Text>
+        </View>
+        <Pressable
+          style={styles.sparkAskBtn}
+          onPress={onSendSpark}
+          accessibilityRole="button"
+          accessibilityLabel="Ask for Spark 500 steps"
+        >
+          <Text style={styles.sparkAskBtnText}>Ask for Spark (500 Steps)</Text>
+        </Pressable>
       </View>
 
       {activeRescue && (
@@ -220,6 +239,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   infoBtnText: { color: '#F5F5F7', fontSize: 14, fontWeight: '700', fontStyle: 'italic' },
+  sparkAskCard: {
+    backgroundColor: 'rgba(255, 159, 67, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 159, 67, 0.25)',
+    borderRadius: 16,
+    padding: 14,
+    gap: 10,
+  },
+  sparkAskInfo: { gap: 3 },
+  sparkAskTitle: { fontSize: 15, fontWeight: '700' },
+  sparkAskBody: { color: '#D4D4D8', fontSize: 12, lineHeight: 17 },
+  sparkAskBtn: {
+    backgroundColor: '#FF9F43',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  sparkAskBtnText: { color: '#0A0A0C', fontSize: 13, fontWeight: '700' },
   rescueCard: {
     backgroundColor: 'rgba(255,159,67,0.18)',
     borderRadius: 16,

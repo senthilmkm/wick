@@ -132,7 +132,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
         <View style={styles.topRightActions}>
           {needsSpark && (
             <Pressable style={styles.sparkBtn} onPress={onSendSpark}>
-              <Text style={styles.sparkBtnText}>Send Spark</Text>
+              <Text style={styles.sparkBtnText}>Ask Spark</Text>
             </Pressable>
           )}
           <Pressable style={styles.iconBtn} onPress={onShareVideo}>
@@ -229,7 +229,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
       {snapshot.state === 'SMOKING_GRACE' && (
         <View style={styles.pacePill}>
           <Text style={[styles.paceText, { color: '#FF9F43' }]}>
-            Smoking • walk 350 steps or Send Spark to rekindle
+            Smoking • walk 350 steps or Ask Spark to rekindle
           </Text>
         </View>
       )}

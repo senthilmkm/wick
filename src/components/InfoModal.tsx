@@ -110,7 +110,7 @@ const GUIDE_ITEMS = [
   },
   {
     title: '6. 500-Step Spark Rescue & Circle',
-    body: 'Tap Send Spark to text a friend a rescue link. When they walk 500 steps for you, your candle reignites. Use Circle to invite friends and export Wax Ledger PDFs.',
+    body: 'Tap Ask for Spark in Circle (or Ask Spark on Flame when low) to text a friend a rescue link. When they walk 500 steps for you, your candle reignites.',
   },
   {
     title: '7. 100% Local-First Privacy',
