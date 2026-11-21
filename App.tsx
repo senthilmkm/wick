@@ -235,6 +235,7 @@ function WickRoot() {
   const completedSparkSubmittedRef = useRef<string | null>(null);
   const checkingSparkRescuesRef = useRef(false);
   const sharingCandleRef = useRef(false);
+  const exportingPdfRef = useRef(false);
 
   const [settings, setSettings] = useState<UserSettings>(() => storageService.loadSettings());
   const [waxLayers, setWaxLayers] = useState<WaxLayer[]>(() => storageService.loadWaxLayers());
@@ -1304,15 +1305,26 @@ function WickRoot() {
   };
 
   const handleExportPdf = async () => {
+    if (exportingPdfRef.current) {
+      return;
+    }
     if (!canExportPdf(entitlement, Date.now())) {
       setPaywallReason('pdf');
       return;
     }
+    exportingPdfRef.current = true;
     try {
       const html = buildWaxLedgerPdfHtml(
         waxLayers,
         snapshot.streakDays,
-        getLocalDateKey(new Date())
+        getLocalDateKey(new Date()),
+        {
+          candleName: settingsRef.current.candleName,
+          waxGrams: snapshot.waxGrams,
+          todaySteps: snapshot.stepsToday,
+          dailyStepGoal: settingsRef.current.dailyStepGoal,
+          todayMood: snapshot.mood,
+        }
       );
       const { uri } = await Print.printToFileAsync({ html });
       await Share.share({
@@ -1321,6 +1333,8 @@ function WickRoot() {
       });
     } catch {
       showToast('PDF export failed.');
+    } finally {
+      exportingPdfRef.current = false;
     }
   };
 

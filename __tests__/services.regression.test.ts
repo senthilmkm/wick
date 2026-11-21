@@ -312,6 +312,25 @@ describe('themes, storage, motion, audio, export & CloudKit regression tests', (
     );
     expect(html).toContain('&lt;script&gt;');
     expect(html).toContain('Calm');
+    expect(html).toContain('7,000 / 8,000');
+
+    const htmlWithToday = buildWaxLedgerPdfHtml([], 1, '2026-11-20', {
+      candleName: 'Senthil',
+      waxGrams: 120,
+      todaySteps: 4000,
+      dailyStepGoal: 8000,
+      todayMood: 'Grateful',
+    });
+    expect(htmlWithToday).toContain('Senthil — Wax Ledger Report');
+    expect(htmlWithToday).toContain('2026-11-20 (Today)');
+    expect(htmlWithToday).toContain('Grateful');
+    expect(htmlWithToday).toContain('120 g');
+
+    const htmlGoalMetToday = buildWaxLedgerPdfHtml([], 1, '2026-11-20', {
+      todaySteps: 9000,
+      dailyStepGoal: 8000,
+    });
+    expect(htmlGoalMetToday).toContain('9,000 / 8,000 (100%)');
 
     const snap = createMorningSnapshot('2026-11-18', 1000, 14, 0, 0);
     expect(await exporter.shareCandleVideo(snap)).toBe('file:///tmp/wick.mp4');
