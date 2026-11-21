@@ -297,14 +297,27 @@ function WickRoot() {
   }, [snapshot.state, snapshot.mood]);
 
   useEffect(() => {
-    if (activeRescue?.completed && completedSparkSubmittedRef.current !== activeRescue.sparkId) {
-      const { sparkId, stepsWalked } = activeRescue;
+    if (!activeRescue?.completed || completedSparkSubmittedRef.current === activeRescue.sparkId) {
+      return;
+    }
+    const { sparkId, stepsWalked } = activeRescue;
+    let cancelled = false;
+    const submitCompletion = () => {
+      if (cancelled || completedSparkSubmittedRef.current === sparkId) {
+        return;
+      }
       void completeNativeSparkShare(sparkId, stepsWalked).then((ok) => {
         if (ok) {
           completedSparkSubmittedRef.current = sparkId;
         }
       });
-    }
+    };
+    submitCompletion();
+    const retryTimer = setInterval(submitCompletion, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(retryTimer);
+    };
   }, [activeRescue?.completed, activeRescue?.sparkId, activeRescue?.stepsWalked]);
 
   const showToast = useCallback((msg: string) => {

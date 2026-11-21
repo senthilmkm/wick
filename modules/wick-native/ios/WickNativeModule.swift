@@ -174,34 +174,25 @@ public class WickNativeModule: Module {
           return
         }
         let results = LockedBox<[[String: Any]]>([])
-        let group = DispatchGroup()
-        for zone in zones {
-          group.enter()
-          let query = CKQuery(recordType: self.recordType, predicate: NSPredicate(value: true))
-          sharedDB.fetch(withQuery: query, inZoneWith: zone.zoneID, desiredKeys: nil, resultsLimit: 20) { res in
-            if case .success(let payload) = res {
-              var zoneItems: [[String: Any]] = []
-              for (recID, matchRes) in payload.matchResults {
-                if case .success(let record) = matchRes {
-                  zoneItems.append([
-                    "id": "\(recID.zoneID.ownerName):\(recID.recordName)",
-                    "displayName": (record["displayName"] as? String) ?? "Friend",
-                    "state": (record["state"] as? String) ?? "STEADY",
-                    "flameIntensity": (record["flameIntensity"] as? Double) ?? 0.6,
-                    "streakDays": (record["streakDays"] as? Int) ?? 0,
-                    "updatedAt": (record["updatedAt"] as? Double) ?? 0,
-                  ])
-                }
-              }
-              results.withLock { $0.append(contentsOf: zoneItems) }
-            }
-            group.leave()
+        let zoneIDs = zones.map { $0.zoneID }
+        let fetchOp = CKFetchRecordZoneChangesOperation(recordZoneIDs: zoneIDs, configurationsByRecordZoneID: nil)
+        fetchOp.recordWasChangedBlock = { recID, res in
+          if case .success(let record) = res, record.recordType == self.recordType {
+            let item: [String: Any] = [
+              "id": "\(recID.zoneID.ownerName):\(recID.recordName)",
+              "displayName": (record["displayName"] as? String) ?? "Friend",
+              "state": (record["state"] as? String) ?? "STEADY",
+              "flameIntensity": (record["flameIntensity"] as? Double) ?? 0.6,
+              "streakDays": (record["streakDays"] as? Int) ?? 0,
+              "updatedAt": (record["updatedAt"] as? Double) ?? 0,
+            ]
+            results.withLock { $0.append(item) }
           }
         }
-        group.notify(queue: .main) {
-          let snapshot = results.withLock { $0 }
-          promise.resolve(snapshot)
+        fetchOp.fetchRecordZoneChangesResultBlock = { _ in
+          promise.resolve(results.withLock { $0 })
         }
+        sharedDB.add(fetchOp)
       }
     }
 
@@ -300,32 +291,23 @@ public class WickNativeModule: Module {
         let updatedAny = LockedBox(false)
         for zone in zones {
           group.enter()
-          let pred = NSPredicate(format: "sparkId == %@", sparkId)
-          let query = CKQuery(recordType: self.sparkRecordType, predicate: pred)
-          sharedDB.fetch(withQuery: query, inZoneWith: zone.zoneID, desiredKeys: nil, resultsLimit: 5) { res in
-            if case .success(let payload) = res {
-              var toSave: [CKRecord] = []
-              for (_, matchRes) in payload.matchResults {
-                if case .success(let record) = matchRes {
-                  record["status"] = "completed" as CKRecordValue
-                  record["stepsWalked"] = stepsWalked as CKRecordValue
-                  record["completedAt"] = NSNumber(value: Date().timeIntervalSince1970 * 1000)
-                  toSave.append(record)
-                }
-              }
-              if !toSave.isEmpty {
-                let saveOp = CKModifyRecordsOperation(recordsToSave: toSave, recordIDsToDelete: nil)
-                saveOp.modifyRecordsResultBlock = { saveRes in
-                  if case .success = saveRes {
-                    updatedAny.withLock { $0 = true }
-                  }
-                  group.leave()
-                }
-                sharedDB.add(saveOp)
-                return
-              }
+          let recID = CKRecord.ID(recordName: sparkId, zoneID: zone.zoneID)
+          sharedDB.fetch(withRecordID: recID) { record, fetchError in
+            guard fetchError == nil, let record else {
+              group.leave()
+              return
             }
-            group.leave()
+            record["status"] = "completed" as CKRecordValue
+            record["stepsWalked"] = stepsWalked as CKRecordValue
+            record["completedAt"] = NSNumber(value: Date().timeIntervalSince1970 * 1000)
+            let saveOp = CKModifyRecordsOperation(recordsToSave: [record], recordIDsToDelete: nil)
+            saveOp.modifyRecordsResultBlock = { saveRes in
+              if case .success = saveRes {
+                updatedAny.withLock { $0 = true }
+              }
+              group.leave()
+            }
+            sharedDB.add(saveOp)
           }
         }
         group.notify(queue: .main) {
@@ -336,36 +318,39 @@ public class WickNativeModule: Module {
 
     AsyncFunction("checkPendingSparkRescues") { (promise: Promise) in
       let privateDB = self.container.privateCloudDatabase
-      let pred = NSPredicate(format: "status == %@", "completed")
-      let query = CKQuery(recordType: self.sparkRecordType, predicate: pred)
-      privateDB.fetch(withQuery: query, inZoneWith: self.zoneID, desiredKeys: nil, resultsLimit: 20) { res in
-        guard case .success(let payload) = res else {
-          promise.resolve([])
-          return
-        }
-        var completedRescues: [[String: Any]] = []
-        var toDelete: [CKRecord.ID] = []
-        for (recID, matchRes) in payload.matchResults {
-          if case .success(let record) = matchRes {
-            let sid = (record["sparkId"] as? String) ?? recID.recordName
-            let walked = (record["stepsWalked"] as? Int) ?? 500
-            completedRescues.append([
-              "sparkId": sid,
-              "stepsWalked": walked,
-            ])
-            toDelete.append(recID)
+      let completedRescues = LockedBox<[[String: Any]]>([])
+      let toDelete = LockedBox<[CKRecord.ID]>([])
+      let fetchOp = CKFetchRecordZoneChangesOperation(recordZoneIDs: [self.zoneID], configurationsByRecordZoneID: nil)
+      fetchOp.recordWasChangedBlock = { recID, res in
+        if case .success(let record) = res,
+           record.recordType == self.sparkRecordType,
+           (record["status"] as? String) == "completed" {
+          let sid = (record["sparkId"] as? String) ?? recID.recordName
+          let walked = (record["stepsWalked"] as? Int) ?? 500
+          completedRescues.withLock {
+            $0.append(["sparkId": sid, "stepsWalked": walked])
           }
+          toDelete.withLock { $0.append(recID) }
         }
-        if toDelete.isEmpty {
+      }
+      fetchOp.fetchRecordZoneChangesResultBlock = { result in
+        guard case .success = result else {
           promise.resolve([])
           return
         }
-        let delOp = CKModifyRecordsOperation(recordsToSave: nil, recordIDsToDelete: toDelete)
+        let idsToDelete = toDelete.withLock { $0 }
+        let rescues = completedRescues.withLock { $0 }
+        if idsToDelete.isEmpty {
+          promise.resolve([])
+          return
+        }
+        let delOp = CKModifyRecordsOperation(recordsToSave: nil, recordIDsToDelete: idsToDelete)
         delOp.modifyRecordsResultBlock = { _ in
-          promise.resolve(completedRescues)
+          promise.resolve(rescues)
         }
         privateDB.add(delOp)
       }
+      privateDB.add(fetchOp)
     }
   }
 }
