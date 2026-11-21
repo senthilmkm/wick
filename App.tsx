@@ -593,20 +593,29 @@ function WickRoot() {
             setPaywallReason('friend');
             return;
           }
-          void cloudKitService.refreshFriendCandles().then((remoteFriends) => {
-            if (remoteFriends.length > 0) {
-              let removedSet = new Set<string>();
-              try {
-                const rawRemoved = kvGet(KEY_REMOVED_FRIENDS);
-                if (rawRemoved) {
-                  removedSet = new Set(JSON.parse(rawRemoved) as string[]);
+          const syncRemoteFriends = () =>
+            cloudKitService.refreshFriendCandles().then((remoteFriends) => {
+              if (remoteFriends.length > 0) {
+                let removedSet = new Set<string>();
+                try {
+                  const rawRemoved = kvGet(KEY_REMOVED_FRIENDS);
+                  if (rawRemoved) {
+                    removedSet = new Set(JSON.parse(rawRemoved) as string[]);
+                  }
+                } catch {
+                  // ignore corrupt removed list
                 }
-              } catch {
-                // ignore corrupt removed list
+                const filtered = remoteFriends.filter((f) => !removedSet.has(f.id));
+                setFriends(filtered);
+                kvSet(KEY_FRIENDS, JSON.stringify(filtered));
               }
-              const filtered = remoteFriends.filter((f) => !removedSet.has(f.id));
-              setFriends(filtered);
-              kvSet(KEY_FRIENDS, JSON.stringify(filtered));
+              return remoteFriends.length;
+            });
+          void syncRemoteFriends().then((count) => {
+            if (count === 0) {
+              setTimeout(() => {
+                void syncRemoteFriends().catch(() => {});
+              }, 2000);
             }
           });
           setActiveTab('circle');
