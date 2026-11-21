@@ -72,8 +72,8 @@ export const WaxLedgerScreen: React.FC<WaxLedgerScreenProps> = ({
       ]}
     >
       <View style={styles.headerRow}>
-        <View>
-          <Text style={[styles.title, { color: theme.primaryText }]}>
+        <View style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
+          <Text style={[styles.title, { color: theme.primaryText }]} numberOfLines={1} adjustsFontSizeToFit>
             {candleName?.trim() ? `${candleName.trim()} • Wax Ledger` : 'Wax Ledger'}
           </Text>
           <Text style={styles.subtitle}>

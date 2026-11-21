@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Linking, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EntitlementState } from '../types/wick';
 
@@ -67,7 +67,8 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <View style={[styles.sheet, { paddingBottom: Math.max(40, insets.bottom + 16) }]}>
+        <View style={[styles.sheet, { paddingBottom: Math.max(32, insets.bottom + 16), maxHeight: '88%' }]}>
+          <ScrollView bounces={false} showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 14 }}>
           <Text style={styles.badge}>WICK PRO • LIFETIME</Text>
           <Text style={styles.title}>{REASON_TITLES[reason]}</Text>
           <Text style={styles.body}>
@@ -106,6 +107,7 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
               <Text style={styles.legalText}>Support</Text>
             </Pressable>
           </View>
+          </ScrollView>
         </View>
       </View>
     </Modal>

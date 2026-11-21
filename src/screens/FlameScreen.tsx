@@ -102,11 +102,16 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
   );
 
   return (
-    <View style={[styles.root, { paddingTop: Math.max(52, insets.top + 8) }]}>
+    <View style={[styles.root, { paddingTop: Math.max(24, insets.top + 8) }]}>
       {/* Top Minimal Corner Actions (Two-Line Micro-Header) */}
       <View style={styles.topRow}>
         <View style={styles.headerLeft}>
-          <Text style={[styles.streakBadge, { color: theme.primaryText }]}>
+          <Text
+            style={[styles.streakBadge, { color: theme.primaryText }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}
+          >
             Day {snapshot.streakDays} • {snapshot.stepsToday.toLocaleString('en-US')} /{' '}
             {settings.dailyStepGoal.toLocaleString('en-US')}
           </Text>
@@ -121,7 +126,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
               ]}
             />
           </View>
-          <Text style={styles.timeLeftSub}>
+          <Text style={styles.timeLeftSub} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
             {goalMet
               ? timeLeftLabel === 'Goal reached'
                 ? 'Goal reached!'
@@ -172,7 +177,7 @@ export const FlameScreen: React.FC<FlameScreenProps> = ({
 
       {/* Realistic Metallic Pocket Lighter Button (shown when unlit or sleeping) */}
       {(snapshot.state === 'UNLIT_MORNING' || snapshot.state === 'NIGHT_SLEEP') && (
-        <View style={styles.lighterContainer}>
+        <View style={[styles.lighterContainer, { marginBottom: Math.max(88, insets.bottom + 76) }]}>
           <Pressable
             style={({ pressed }) => [
               styles.lighterDevice,
@@ -326,6 +331,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerLeft: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 8,
     gap: 4,
   },
   goalBarTrack: {
@@ -351,7 +359,9 @@ const styles = StyleSheet.create({
   },
   topRightActions: {
     flexDirection: 'row',
-    gap: 10,
+    alignItems: 'center',
+    flexShrink: 0,
+    gap: 6,
   },
   sparkBtn: {
     backgroundColor: '#FF9F43',

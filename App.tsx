@@ -5,7 +5,20 @@ import * as Print from 'expo-print';
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Linking, Modal, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  AppState,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { MMKV } from 'react-native-mmkv';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1671,8 +1684,12 @@ function WickRoot() {
           setShowCandleNameModal(false);
         }}
       >
-        <View style={styles.moodBackdrop}>
-          <View style={styles.moodSheet}>
+        <KeyboardAvoidingView
+          style={styles.moodBackdrop}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={[styles.moodSheet, { maxHeight: '88%', paddingBottom: Math.max(28, insets.bottom + 16) }]}>
+            <ScrollView bounces={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 12 }}>
             <Text style={styles.moodTitle}>Name Your Candle</Text>
             <Text style={styles.moodSub}>
               Before pairing, add your name so friends see who you are instead of &quot;Friend&quot;.
@@ -1717,8 +1734,9 @@ function WickRoot() {
             >
               <Text style={styles.moodSkipText}>Cancel</Text>
             </Pressable>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {(tabsVisible || activeTab !== 'flame') && (

@@ -1,5 +1,16 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const NAME_PRESETS = ['Solace', 'Hearth', 'Ember', 'Dawn'];
 
@@ -14,12 +25,29 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
   initialCandleName = '',
   onComplete,
 }) => {
+  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  const compact = height < 700;
   const [goal, setGoal] = useState(initialGoal);
   const [candleName, setCandleName] = useState(initialCandleName);
 
   return (
-    <View style={styles.root}>
-      <View style={styles.card}>
+    <KeyboardAvoidingView
+      style={styles.root}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: Math.max(20, insets.top + 12),
+            paddingBottom: Math.max(24, insets.bottom + 16),
+          },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={[styles.card, compact && { gap: 12 }]}>
         <Text style={styles.brand}>wick</Text>
         <Text style={styles.headline}>Keep your wick lit.</Text>
         <Text style={styles.body}>
@@ -82,8 +110,9 @@ export const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
         >
           <Text style={styles.primaryText}>Light My Candle</Text>
         </Pressable>
-      </View>
-    </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -91,6 +120,9 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: '#0A0A0C',
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
