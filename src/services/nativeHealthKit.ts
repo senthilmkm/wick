@@ -56,7 +56,10 @@ export async function fetchTodayHealthKitSteps(): Promise<number | null> {
     );
 
     const qty = stats?.sumQuantity?.quantity;
-    return typeof qty === 'number' && Number.isFinite(qty) ? Math.max(0, Math.round(qty)) : 0;
+    if (typeof qty !== 'number' || !Number.isFinite(qty)) {
+      return null;
+    }
+    return Math.max(0, Math.round(qty));
   } catch {
     return null;
   }

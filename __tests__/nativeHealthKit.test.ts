@@ -58,9 +58,14 @@ describe('nativeHealthKit', () => {
     mockQueryStatisticsForQuantity.mockResolvedValueOnce({ sumQuantity: { quantity: 7432.6 } });
     expect(await fetchTodayHealthKitSteps()).toBe(7433);
 
-    // Second call skips isHealthDataAvailable & requestAuthorization
-    mockQueryStatisticsForQuantity.mockResolvedValueOnce({});
+    mockQueryStatisticsForQuantity.mockResolvedValueOnce({ sumQuantity: { quantity: 0 } });
     expect(await fetchTodayHealthKitSteps()).toBe(0);
+
+    // A read with no quantity is not a real zero.
+    mockQueryStatisticsForQuantity.mockResolvedValueOnce({});
+    expect(await fetchTodayHealthKitSteps()).toBeNull();
+    mockQueryStatisticsForQuantity.mockResolvedValueOnce({ sumQuantity: { quantity: Number.NaN } });
+    expect(await fetchTodayHealthKitSteps()).toBeNull();
     expect(mockIsHealthDataAvailable).toHaveBeenCalledTimes(1);
     expect(mockRequestAuthorization).toHaveBeenCalledTimes(1);
   });

@@ -499,12 +499,15 @@ function WickRoot() {
   }, []);
 
   const applyStepTotal = useCallback(
-    (steps: number) => {
+    (steps: number, fromHealth = false) => {
       const now = trustedDate();
       const todayKey = getLocalDateKey(now);
       setSnapshot((prev) => {
-        const monotonicSteps =
-          prev.dateKey === todayKey ? Math.max(prev.stepsToday, steps) : steps;
+        const sameDay = prev.dateKey === todayKey;
+        if (fromHealth && sameDay && steps === 0 && prev.stepsToday > 0) {
+          return prev;
+        }
+        const monotonicSteps = sameDay && !fromHealth ? Math.max(prev.stepsToday, steps) : steps;
         const activeGoal = settingsRef.current.dailyStepGoal;
         const res = evaluateCandleState({
           snapshot: prev,
@@ -718,11 +721,13 @@ function WickRoot() {
       return;
     }
     const todayKey = getLocalDateKey(trustedDate());
-    if (snapshotDateKeyRef.current !== todayKey || steps >= hkBaselineStepsRef.current) {
-      hkBaselineStepsRef.current = steps;
-      pedometerSessionOffsetRef.current = 0;
+    const newDay = snapshotDateKeyRef.current !== todayKey;
+    if (!newDay && steps === 0 && hkBaselineStepsRef.current > 0) {
+      return;
     }
-    applyStepTotal(Math.max(steps, hkBaselineStepsRef.current));
+    hkBaselineStepsRef.current = steps;
+    pedometerSessionOffsetRef.current = 0;
+    applyStepTotal(steps, true);
   }, [applyStepTotal, trustedDate]);
 
   // Initialize Keychain anti-abuse state, durable onboarding/settings fallback, and billing on mount
@@ -1096,14 +1101,17 @@ function WickRoot() {
     });
     let unsubPedometer: (() => void) | null = null;
     let active = true;
-    void subscribeToLivePedometer((sessionSteps) => {
+    let lastPedometerRefresh = 0;
+    void subscribeToLivePedometer(() => {
       if (!active) {
         return;
       }
-      const delta = Math.max(0, sessionSteps - pedometerSessionOffsetRef.current);
-      pedometerSessionOffsetRef.current = sessionSteps;
-      hkBaselineStepsRef.current += delta;
-      applyStepTotal(hkBaselineStepsRef.current);
+      const nowMs = Date.now();
+      if (nowMs - lastPedometerRefresh < 8000) {
+        return;
+      }
+      lastPedometerRefresh = nowMs;
+      void syncHealthKit();
     }).then((unsub) => {
       if (active) {
         unsubPedometer = unsub;
